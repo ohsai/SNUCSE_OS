@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -e
+
+ARG1="$1"
+COMPILER="arm-linux-gnueabihf-"
+CCACHE="ccache"
+JOBS=$(getconf _NPROCESSORS_ONLN)
+KERNEL_IMAGE=zImage
+KERNEL_DEFCONFIG=artik10_defconfig
+DTB_PREFIX_DIR=arch/arm/boot/dts
+KERNEL_DTB=exynos5422-artik10.dtb
+MODULE_SIZE=32
+
+export CROSS_COMPILE="$COMPILER"
+
+# Clean (if needed)
+if [[ "$ARG1" = "--clean" ]]; then
+  rm -f exynos5422-artik10.dtb
+  rm -f image.tar
+  rm -f modules.img
+  rm -f zImage
+  exec make clean
+fi
+
+# Build kernel
+make $KERNEL_DEFCONFIG ARCH=arm
+make $KERNEL_IMAGE -j"$JOBS" ARCH=arm CROSS_COMPILE="$CCACHE $COMPILER"
+make $KERNEL_DTB ARCH=arm
+
+# Build modules.img
+if ! [[ -e modules.img ]]; then
+  make modules_prepare ARCH=arm
+  make modules -j"$JOBS" ARCH=arm CROSS_COMPILE="$CCACHE $COMPILER"
+  mkdir -p modules
+  make modules_install ARCH=arm INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1
+  make_ext4fs -b 4096 -L modules -l ${MODULE_SIZE}M modules.img modules/lib/modules/
+  rm -rf modules
+fi
+
+# Install kernel output
+cat arch/arm/boot/$KERNEL_IMAGE $DTB_PREFIX_DIR/$KERNEL_DTB > $KERNEL_IMAGE
+cp $DTB_PREFIX_DIR/$KERNEL_DTB .
+
+# Create tarball
+tar cvf image.tar $KERNEL_IMAGE $KERNEL_DTB modules.img
+
+exit 0
