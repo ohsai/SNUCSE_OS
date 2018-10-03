@@ -1,5 +1,82 @@
 # osfall2018-team3
 
+## How to Configure, build, install
+```console
+foo@bar:~$ git clone https://github.com/RockyLim92/osfall2018-team3.git
+
+# compile/building kernel code
+
+foo@bar:~/osfall2018-team3$ ./build
+
+# install/flashing kernel image to device
+# on other terminal  
+
+foo@bar:~/osfall2018-team3$ screen -S team3 /dev/ttyUSB0 115200 cs8 ixoff
+
+# press reset button for 1 sec and press power button for reboot
+# then press any key at the prompt "PRESS ANY KEY"
+
+ARTIK10 # thordown
+
+# on original terminal
+
+foo@bar:~/osfall2018-team3$ lthor image.tar
+
+Linux Thor downloader ~~~
+..
+..
+request target reboot : success  
+# if this prompts, flashing is successful
+```
+
+How to execute test code
+```console
+# on other terminal  
+foo@bar:~/osfall2018-team3$ screen -S team3 /dev/ttyUSB0 115200 cs8 ixoff
+
+# press reset button for 1 sec and press power button for reboot
+# type as below to log in to device as root
+log in : root
+password : tizen
+
+# enable connection through sdb
+root$ direct_set_debug.sh --sdb-set
+
+# on original terminal
+foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/test_ptree.c -o ./test/test  
+foo@bar:~/osfall2018-team3$ sdb push ./test/test /root/test
+foo@bar:~/osfall2018-team3$ sdb shell
+$ /root/test
+
+swapper/0...
+..
+..
+kthread..
+..
+
+# result printed if successful
+```
+
+## How we installed system call in kernel code
+We have appended or modified following codes in appropriate positions of listed files.
+* arch/arm/include/uapi/asm/unistd.h : register system call
+```
+#define __NR_ptree                      (__NR_SYSCALL_BASE+380)
+```
+* arch/arm/include/asm/unistd.h : increased number of total system calls in multiple of 4 
+```
+#define __NR_syscalls(384)
+```
+* arch/arm/kernel/calls.S
+```
+CALL(sys_ptree)
+```
+* kernel/ptree.c : code of system call routine implemented
+* kernel/Makefile : append 'ptree.o' at the end of obj-y definition 
+```
+obj-y = .... / ... ptree.o
+```
+
 ## Implementation
 
 ### Main routine (methods used)
