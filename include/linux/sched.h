@@ -1044,7 +1044,7 @@ struct sched_wrr_entity {
         unsigned int weight;
         unsigned long timeout;
         rwlock_t weight_lock;
-}
+};
 
 struct sched_rt_entity {
 	struct list_head run_list;
