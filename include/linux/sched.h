@@ -1038,6 +1038,14 @@ struct sched_entity {
 #endif
 };
 
+struct sched_wrr_entity {
+        struct list_head run_list;
+        unsigned int time_slice;
+        unsigned int weight;
+        unsigned long timeout;
+        rwlock_t weight_lock;
+}
+
 struct sched_rt_entity {
 	struct list_head run_list;
 	unsigned long timeout;
@@ -1063,6 +1071,8 @@ enum perf_event_task_context {
 	perf_sw_context,
 	perf_nr_task_contexts,
 };
+
+
 
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */

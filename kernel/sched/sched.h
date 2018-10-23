@@ -108,6 +108,7 @@ extern struct mutex sched_domains_mutex;
 
 struct cfs_rq;
 struct rt_rq;
+struct wrr_rq;
 
 extern struct list_head task_groups;
 
@@ -151,7 +152,10 @@ struct task_group {
 
 	struct rt_bandwidth rt_bandwidth;
 #endif
-
+#ifdef CONFIG_WRR_GROUP_SCHED
+        struct sched_wrr_entity ** wrr_se;
+        struct wrr_rq ** wrr_rq;
+#endif
 	struct rcu_head rcu;
 	struct list_head list;
 
@@ -324,6 +328,15 @@ static inline int rt_bandwidth_enabled(void)
 {
 	return sysctl_sched_rt_runtime >= 0;
 }
+/* Weighted Round Robin per-cpu runqueue */
+struct wrr_rq{
+        unsigned long weight_sum;
+        unsigned long number_of_task;
+        struct list_head run_list;
+        raw_spinlock_t wrr_rq_lock;
+        struct task_struct * cur_task;
+}
+
 
 /* Real-Time classes' related field in a runqueue: */
 struct rt_rq {
