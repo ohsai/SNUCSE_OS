@@ -10,11 +10,18 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq)
 	struct wrr_rq *wrr_rq;
 
 	wrr_rq = &rq->wrr;
+	wrr_se = list_last_entry(wrr_rq, sched_wrr_entity, run_list);
+	p = container_of(wrr_se, struct task_struct, wrr);
+
+	return p;
 }
 
 static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 {
-	// if still active, enqueue this task_struct.
+	struct task_struct *p;
+	struct wrr_rq *wrr_rq;
+
+	enqueue_task_wrr(rq, p, ENQUEUE_HEAD);
 }
 
 static int
