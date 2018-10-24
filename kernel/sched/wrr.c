@@ -43,6 +43,7 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 
 	rq = cpu_rq(select_cpu);
 	lowest = &rq->wrr->weight_sum;
+	int num = 1;
 
 	for_each_possible_cpu(cpu) {
 		rq = cpu_rq(cpu);
@@ -50,9 +51,25 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 
 		if (tmp < lowest) {
 			lowest = tmp;
-			select_cpu = cpu;
+			num = 1;
+		}
+		else if (tmp == lowest)
+			num++;
+	}
+
+	int arr[num]; int i = 0;
+	for_each_possible_cpu(cpu) {
+		rq = cpu_rq(cpu);
+		tmp = &rq->wrr->weight_sum;
+
+		if (tmp == lowest) {
+			arr[i] = cpu;
+			i++;
 		}
 	}
+
+	get_random_bytes(&i, 1);
+	select_cpu = arr[i % num];
 
 	rcu_read_unlock();
 
