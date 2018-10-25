@@ -263,17 +263,17 @@ void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 }
 void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq* wrr_rq){
 	struct task_struct * p;
-	struct sched_wrr_entry *wrr_se;
+	struct sched_wrr_entity *wrr_se;
 	int print_class = -1;
 #define P(x) \
-	SEQ_printf(m, "  .%-30s: %Ld\n", #x, (long long)(rt_rq->x))
+	SEQ_printf(m, "  .%-30s: %Ld\n", #x, (long long)(wrr_rq->x))
 	SEQ_printf(m, "\nrt_rq[%d]:\n", cpu);
         P(weight_sum);
         P(number_of_task);
 	list_for_each_entry_rcu(wrr_se, &wrr_rq->run_list, run_list) {
 	 	if(wrr_se == NULL) {
 	  		SEQ_printf(m ,"** sched_wrr_entity is NULL in queue\n");
-			return 1;
+			return;
 	 	}
 		p = container_of(wrr_se, struct task_struct, wrr);
 		if(p == NULL) continue;

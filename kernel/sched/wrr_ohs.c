@@ -10,9 +10,23 @@ static spinlock_t lb_lock;
 //default base timeslice is 10 msecs. multiplying task wrr weight makes the task's timeslice
 #define DEFAULT_WEIGHT 10
 
+struct task_struct *
+wrr_e_to_task (struct sched_wrr_entity * wrr_e){
+        return container_of(wrr_e, struct task_struct, wrr);
+}
+static inline int on_wrr_rq(struct sched_wrr_entity *wrr_e){
+        return !list_empty(&wrr_e->run_list);
+}
+static inline void
+wrr_e_time_slice_reset(struct sched_wrr_entity * wrr_e){
+        wrr_e->time_slice = wrr_e->weight * WRR_TIMESLICE;
+}
+
+
 static int find_highest_lowest_cpus(int * max_cpu_out, int * min_cpu_out){
         struct rq * cur_rq;
         int max_weight, min_weight, max_cpu, min_cpu;
+        int cpu;
         //Initialize
         int init_cpu = smp_processor_id(); //this_cpu
         if (!cpumask_test_cpu(init_cpu, cpu_active_mask)){
@@ -60,20 +74,27 @@ static int task_migratable(struct rq * rq, struct task_struct *p , int dest_cpu)
         return 0;
 }
 static int migrate_task_wrr(int src_cpu, int dest_cpu){
-        struct sched_wrr_entry * wrr, temp;
-        struct rq * rq_dest, rq_src;
-        struct task_struct * cur_task, migrating_task = NULL;
-        int highest_eligible_weight;
+        struct sched_wrr_entity * wrr;
+        struct sched_wrr_entity * temp;
+        struct rq * rq_dest;
+        struct rq * rq_src;
+        struct task_struct * cur_task;
+        struct task_struct *  migrating_task;
+        int highest_eligible_weight, min_weight, max_weight;
+        migrating_task = NULL;
         rq_src = cpu_rq(src_cpu);
         rq_dest = cpu_rq(dest_cpu);
         highest_eligible_weight = 0;
+
         double_rq_lock(rq_src, rq_dest);
+        min_weight = rq_dest->wrr.weight_sum;
+        max_weight = rq_src->wrr.weight_sum;
         list_for_each_entry_safe(wrr, temp,&rq_src->wrr.run_list, run_list){
                 cur_task = wrr_e_to_task(wrr);
                 if(task_migratable(rq_src,cur_task,dest_cpu) && // eligibility
                    wrr->weight > highest_eligible_weight && // highest
                    min_weight + wrr->weight < max_weight - wrr->weight){ // irreversible
-                        highest_eligible_weight = cur_task->weight;
+                        highest_eligible_weight = wrr->weight;
                         migrating_task = cur_task;
                 }
         }
@@ -87,7 +108,7 @@ static int migrate_task_wrr(int src_cpu, int dest_cpu){
                         // affinity changed
                         return 0;
                 }
-                if(on_wrr_rq(migrating_task)){
+                if(on_wrr_rq(&migrating_task->wrr)){
                         deactivate_task(rq_src, migrating_task, 0);
                         set_task_cpu(migrating_task, rq_src->cpu);
                         activate_task(rq_dest, migrating_task, 0);
@@ -114,12 +135,12 @@ static void __wrr_load_balance(void){
         }
         return;
 }
-static void wrr_load_balance(struct rq * rq, int cpu){
+void wrr_load_balance(struct rq * rq, int cpu){
         spin_lock(&lb_lock);
         if(time_after_eq(jiffies, next_lb_time)){
                 next_lb_time = jiffies + LB_INTERVAL * HZ; //next_lb_time_refresh
                 preempt_disable(); // This thread does not go down until enabled
-                __wrr_load_balance()
+                __wrr_load_balance();
                 preempt_enable();
         }
         spin_unlock(&lb_lock);        
@@ -131,7 +152,7 @@ void init_sched_wrr_class(void){
         spin_lock_init(&lb_lock);
 };
 
-#ifndef CONFIG_SCHED_DEBUG
+#ifdef CONFIG_SCHED_DEBUG
 extern void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq * wrr_rq);
 void print_wrr_stats(struct seq_file *m, int cpu){
         struct wrr_rq * wrr_rq ;
@@ -143,26 +164,18 @@ void print_wrr_stats(struct seq_file *m, int cpu){
 
 #endif
 
-struct task_struct *
-wrr_e_to_task (struct sched_wrr_entity * wrr_e){
-        return container_of(wrr_e, struct task_struct, wrr)
-}
-
-static inline int on_wrr_rq(struct sched_wrr_entity *wrr_e){
-        return !list_empty(&wrr_e->run_list);
-}
 
 static inline 
 void inc_wrr_tasks(struct sched_wrr_entity *wrr_e, struct wrr_rq *wrr_rq)
 {
-        rq->wrr.number_of_task++;
-        rq->wrr.weight_sum += wrr_e.weight;
+        wrr_rq->number_of_task++;
+        wrr_rq->weight_sum += wrr_e->weight;
 }
 static inline 
 void dec_wrr_tasks(struct sched_wrr_entity *wrr_e, struct wrr_rq *wrr_rq)
 {
-        rq->wrr.number_of_task--;
-        rq->wrr.weight_sum -= wrr_e.weight;
+        wrr_rq->number_of_task--;
+        wrr_rq->weight_sum -= wrr_e->weight;
 }
 
 void init_wrr_rq(struct wrr_rq *wrr_rq)
@@ -208,11 +221,7 @@ dequeue_task_wrr(struct rq * rq, struct task_struct *p, int flags)
                 list_del_init(&wrr_e->run_list);
                 dec_wrr_tasks(wrr_e,wrr_rq);
         }
-        dec_nr_running(rq)
-}
-static inline void
-wrr_e_time_slice_reset(struct sched_wrr_entity * wrr_e){
-        wrr_e->time_slice = wrr_e->weight * WRR_TIMESLICE;
+        dec_nr_running(rq);
 }
 static void
 requeue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity * wrr_e, int head)
@@ -245,7 +254,8 @@ task_tick_wrr(struct rq *rq, struct task_struct *p, int queued){
         if(--wrr_e->time_slice)
                 return;
         wrr_e_time_slice_reset(wrr_e); //also does in requeue  but in case of singular list
-        if(wrr_e->runlist.prev != wrr_e->run_list.next){
+        if(wrr_e->run_list.prev != wrr_e->run_list.next){ //is_not_singular
+        //if(!list_is_singular(wrr_e->run_list) && !list_empty(wrr_e->run_list)){
                 requeue_task_wrr(rq, p, 0);
                 set_tsk_need_resched(p);
                 return;
@@ -283,7 +293,7 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 static int
 select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 {
-	struct task_struct *curr;
+	//struct task_struct *curr;
 	struct rq *rq;
 	int cpu;
 
@@ -301,7 +311,7 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 	rcu_read_lock();
 
 	rq = cpu_rq(select_cpu);
-	lowest = &rq->wrr->weight_sum;
+	lowest = (&rq->wrr)->weight_sum;
 
 	for_each_cpu(cpu,cpu_active_mask) { 
                 // active cpu =< online cpu =< possible cpu (subset relation)
@@ -334,15 +344,15 @@ static void task_fork_wrr (struct task_struct *p){
 }
 static void switched_to_wrr(struct rq * this_rq, struct task_struct *task){
         //define wrr_e, then do. get weight from default. this is incomplete function
-        struct sched_wrr_entity * wrr_e = &p->wrr;
+        struct sched_wrr_entity * wrr_e = &task->wrr;
         wrr_e->weight = DEFAULT_WEIGHT;
         wrr_e_time_slice_reset(wrr_e);
 }
 static void switched_from_wrr(struct rq * this_rq, struct task_struct *task){
 
 }
-static void get_rr_interval_wrr(struct rq * rq, struct task_struct *task){
-        return p->wrr.weight * WRR_TIMESLICE;
+static unsigned int get_rr_interval_wrr(struct rq * rq, struct task_struct *task){
+        return task->wrr.weight * WRR_TIMESLICE;
 }
 static void prio_changed_wrr(struct rq * rq, struct task_struct *p, int oldprio){}
 
