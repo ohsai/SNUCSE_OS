@@ -5,7 +5,10 @@
 static unsigned long next_lb_time;
 static spinlock_t lb_lock;
 #define LB_INTERVAL 2           //in Seconds
-
+#define WRR_TIMESLICE (10 * HZ / 1000) 
+//Referenced RR_TIMESLICE definition
+//default base timeslice is 10 msecs. multiplying task wrr weight makes the task's timeslice
+#define DEFAULT_WEIGHT 10
 
 static int find_highest_lowest_cpus(int * max_cpu_out, int * min_cpu_out){
         struct rq * cur_rq;
@@ -129,7 +132,15 @@ void init_sched_wrr_class(void){
 };
 
 #ifndef CONFIG_SCHED_DEBUG
-void print_wrr_stats(struct seq_file *m, int cpu);
+extern void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq * wrr_rq);
+void print_wrr_stats(struct seq_file *m, int cpu){
+        struct wrr_rq * wrr_rq ;
+        rcu_read_lock();
+        wrr_rq = &cpu_rq(cpu)->wrr;
+        print_wrr_rq(m,cpu,wrr_rq);
+        rcu_read_unlock();
+}
+
 #endif
 
 struct task_struct *
@@ -159,7 +170,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
         wrr_rq->weight_sum = 0;
         wrr_rq->number_of_task = 0;
         raw_spin_lock_init(&wrr_rq->wrr_rq_lock);
-        wrr_rq->cur_task = NULL;       // cur_task name is so shitty. curr is better i think
+        //wrr_rq->cur_task = NULL;       // cur_task name is so shitty. rq->curr is better i think
         INIT_LIST_HEAD(&wrr_rq->run_list);
 
 }
@@ -221,9 +232,11 @@ requeue_task_wrr(struct rq * rq, struct task_struct *p, int head)
         requeue_wrr_entity(&rq->wrr,wrr_e,head);
         wrr_e_time_slice_reset(wrr_e);
 }
+static void yield_task_wrr (struct rq *rq){
+        requeue_task_wrr(rq, rq->curr, 0);
+}
+//no prioirty term
 
-#define WRR_TIMESLICE (HZ / 100) //this is kinda weird
-#define DEFAULT_WEIGHT 10
 static void
 task_tick_wrr(struct rq *rq, struct task_struct *p, int queued){
         struct sched_wrr_entity * wrr_e = &p->wrr;
@@ -239,6 +252,7 @@ task_tick_wrr(struct rq *rq, struct task_struct *p, int queued){
         }
 }
 unsigned int base_time_slice = 10000000ULL; // 1*10^7 nanoseconds
+static void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags){} 
 
 static struct task_struct *pick_next_task_wrr(struct rq *rq)
 {
@@ -265,6 +279,7 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 	// if still active, enqueue this task_struct.
 }
 
+#ifdef CONFIG_SMP
 static int
 select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 {
@@ -303,24 +318,33 @@ select_task_rq_wrr(struct task_struct *p, int sd_flag, int flags)
 
 	return select_cpu;
 }
-static void yield_task_wrr (struct rq *rq){
-        requeue_task_wrr(rq, rq->curr, 0);
-}
-//no prioirty term
-static void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags){} 
+static void rq_online_wrr(struct rq *rq){}
+static void rq_offline_wrr(struct rq *rq){}
 static void pre_schedule_wrr (struct rq *this_rq, struct task_struct *task){}
 static void post_schedule_wrr (struct rq *this_rq){}
 static void task_woken_wrr (struct rq *this_rq, struct task_struct *task){} //pushing supervised globally
-static void rq_online_wrr(struct rq *rq){}
-static void rq_offline_wrr(struct rq *rq){}
+#endif
+
+static void set_curr_task_wrr(struct rq * rq){}
 static void task_fork_wrr (struct task_struct *p){
         //define wrr_e, then do.get weight from parent. this is incomplete function
+        struct sched_wrr_entity * wrr_e = &p->wrr;
+        wrr_e->weight = p->real_parent->wrr.weight;       
         wrr_e_time_slice_reset(wrr_e);
 }
-static void switched_to_wrr(struct rq * rq, struct task_struct *p){
+static void switched_to_wrr(struct rq * this_rq, struct task_struct *task){
         //define wrr_e, then do. get weight from default. this is incomplete function
+        struct sched_wrr_entity * wrr_e = &p->wrr;
+        wrr_e->weight = DEFAULT_WEIGHT;
         wrr_e_time_slice_reset(wrr_e);
 }
+static void switched_from_wrr(struct rq * this_rq, struct task_struct *task){
+
+}
+static void get_rr_interval_wrr(struct rq * rq, struct task_struct *task){
+        return p->wrr.weight * WRR_TIMESLICE;
+}
+static void prio_changed_wrr(struct rq * rq, struct task_struct *p, int oldprio){}
 
 
 const struct sched_class wrr_sched_class = {
