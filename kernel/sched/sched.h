@@ -335,7 +335,7 @@ struct wrr_rq{
         struct list_head run_list;
         raw_spinlock_t wrr_rq_lock;
         struct task_struct * cur_task;
-}
+};
 
 
 /* Real-Time classes' related field in a runqueue: */
@@ -435,6 +435,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
+        struct wrr_rq wrr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */

@@ -261,6 +261,34 @@ void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 #undef PN
 #undef P
 }
+void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq* wrr_rq){
+	struct task_struct * p;
+	struct sched_wrr_entity *wrr_se;
+	int print_class = -1;
+#define P(x) \
+	SEQ_printf(m, "  .%-30s: %Ld\n", #x, (long long)(wrr_rq->x))
+	SEQ_printf(m, "\nrt_rq[%d]:\n", cpu);
+        P(weight_sum);
+        P(number_of_task);
+	list_for_each_entry_rcu(wrr_se, &wrr_rq->run_list, run_list) {
+	 	if(wrr_se == NULL) {
+	  		SEQ_printf(m ,"** sched_wrr_entity is NULL in queue\n");
+			return;
+	 	}
+		p = container_of(wrr_se, struct task_struct, wrr);
+		if(p == NULL) continue;
+
+		if(p->sched_class == &rt_sched_class) print_class = 1;
+		if(p->sched_class == &fair_sched_class) print_class = 0;
+		if(p->sched_class == &wrr_sched_class) print_class = 6;
+		
+		SEQ_printf(m, "%9d %9d %15s %10d %10Ld %10Ld",
+			print_class, p->policy, p->comm, p->pid, 
+		  (long long)wrr_se->weight, (long long)jiffies_to_msecs(wrr_se->time_slice) );
+	}
+#undef P
+
+}
 
 extern __read_mostly int sched_clock_running;
 
@@ -329,6 +357,7 @@ do {									\
 	spin_lock_irqsave(&sched_debug_lock, flags);
 	print_cfs_stats(m, cpu);
 	print_rt_stats(m, cpu);
+        print_wrr_stats(m, cpu);
 
 	rcu_read_lock();
 	print_rq(m, rq, cpu);

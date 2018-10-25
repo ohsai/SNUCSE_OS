@@ -1,10 +1,13 @@
+
 #include "sched.h"
 #include <linux/slab.h>
 
 static unsigned long next_lb_time;
 static spinlock_t lb_lock;
-#define LB_INTERVAL 2           //in Seconds
 
+#define LB_INTERVAL 2           //in Seconds
+#define WRR_TIMESLICE (HZ / 100) //this is kinda weird
+#define DEFAULT_WEIGHT 10
 
 static int find_highest_lowest_cpus(int * max_cpu_out, int * min_cpu_out){
         struct rq * cur_rq;
@@ -221,8 +224,6 @@ requeue_task_wrr(struct rq * rq, struct task_struct *p, int head)
         wrr_e_time_slice_reset(wrr_e);
 }
 
-#define WRR_TIMESLICE (HZ / 100) //this is kinda weird
-#define DEFAULT_WEIGHT 10
 static void
 task_tick_wrr(struct rq *rq, struct task_struct *p, int queued){
         struct sched_wrr_entity * wrr_e = &p->wrr;

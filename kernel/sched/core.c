@@ -90,6 +90,75 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+// proj 2 system call definition
+#define WRR_WEIGHT_MAX 20
+#define WRR_WEIGHT_MIN 1
+#include <linux/cred.h>
+#include <linux/uidgid.h>
+const kuid_t root_uid = KUIDT_INIT(0);
+
+SYSCALL_DEFINE2(sched_setweight,pid_t, pid, int, weight){
+        struct task_struct * curr;
+        struct rq * rq;
+        unsigned int prev_weight;
+        // input bound check, pid to task
+        if(pid < 0){
+                return -EINVAL;
+        }
+        else if((WRR_WEIGHT_MIN >weight) || (WRR_WEIGHT_MAX < weight)){
+                return -EINVAL;
+
+        }
+        else if (pid == 0){
+                curr = current;
+        }
+        else{
+                curr = find_task_by_vpid(pid);
+                //curr = find_process_by_pid(pid);
+                if(curr == NULL)
+                        return -EINVAL;
+        }
+        //user permission check
+        if(!uid_eq(current_uid(), task_uid(curr)) && !uid_eq(current_uid(), root_uid)){
+                return -EPERM;
+        }
+        if(curr->wrr.weight < weight && !uid_eq(current_uid(), root_uid)){
+                //Only Administrator can increase the weight
+                return -EPERM;
+        }
+        //wrr entry weight modification
+        prev_weight = curr->wrr.weight;
+        curr->wrr.weight = (unsigned int) weight; // after bound check, casting is safe
+        //rq weight modification //referenced from core.c task_rq_lock
+        rq = task_rq(curr);
+        raw_spin_lock(&rq->lock);
+        if(likely(rq == task_rq(curr))){ //during spinlock spin it may have changed
+                rq->wrr.weight_sum -= prev_weight;
+                rq->wrr.weight_sum += curr->wrr.weight;
+        }
+        raw_spin_unlock(&rq->lock);
+        printk(KERN_DEBUG "SET_WEIGHT task pid %d with weight %u",task_pid_nr(curr), curr->wrr.weight);
+        return 0;
+}
+SYSCALL_DEFINE1(sched_getweight,pid_t, pid){
+        struct task_struct * curr;
+        if(pid < 0){
+                return -EINVAL;
+        }
+        else if (pid == 0){
+                return get_current()->wrr.weight;
+        }
+        else{
+                curr = find_task_by_vpid(pid);
+                if(curr == NULL)
+                        return -EINVAL;
+                return curr->wrr.weight;
+        }
+        printk(KERN_DEBUG "GET_WEIGHT task pid %d", pid);
+}
+// proj2 syscall definition end
+
+
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
 	unsigned long delta;
@@ -2926,7 +2995,7 @@ pick_next_task(struct rq *rq)
 		if (likely(p))
 			return p;
 	}
-        if (likely(rq->nr_running == rq->wrr.number_of_tasks)){
+        if (likely(rq->nr_running == rq->wrr.number_of_task)){
                 p = wrr_sched_class.pick_next_task(rq);
                 if (likely(p))
                         return p;
