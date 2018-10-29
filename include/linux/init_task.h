@@ -159,6 +159,9 @@ extern struct task_group root_task_group;
  *  INIT_TASK is used to set up the first task table, touch at
  * your own risk!. Base=0, limit=0x1fffff (=2MB)
  */
+#define WRR_TIMESLICE (10 * HZ / 1000) 
+#define WRR_DEFAULT_WEIGHT 10
+
 #define INIT_TASK(tsk)	\
 {									\
 	.state		= 0,						\
@@ -180,6 +183,11 @@ extern struct task_group root_task_group;
 		.run_list	= LIST_HEAD_INIT(tsk.rt.run_list),	\
 		.time_slice	= RR_TIMESLICE,				\
 	},								\
+        .wrr            = {                                             \
+                .run_list       = LIST_HEAD_INIT(tsk.wrr.run_list),     \
+                .weight         = WRR_DEFAULT_WEIGHT,                   \
+                .time_slice     = WRR_DEFAULT_WEIGHT * WRR_TIMESLICE,   \
+        },                                                              \
 	.tasks		= LIST_HEAD_INIT(tsk.tasks),			\
 	INIT_PUSHABLE_TASKS(tsk)					\
 	INIT_CGROUP_SCHED(tsk)						\

@@ -102,6 +102,7 @@ SYSCALL_DEFINE2(sched_setweight,pid_t, pid, int, weight){
         struct rq * rq;
         unsigned int prev_weight;
         // input bound check, pid to task
+        //printk(KERN_INFO"sched_setweight pid %d",pid);
         if(pid < 0){
                 return -EINVAL;
         }
@@ -113,7 +114,9 @@ SYSCALL_DEFINE2(sched_setweight,pid_t, pid, int, weight){
                 curr = current;
         }
         else{
+                rcu_read_lock();
                 curr = find_task_by_vpid(pid);
+                rcu_read_unlock();
                 //curr = find_process_by_pid(pid);
                 if(curr == NULL)
                         return -EINVAL;
@@ -129,19 +132,24 @@ SYSCALL_DEFINE2(sched_setweight,pid_t, pid, int, weight){
         //wrr entry weight modification
         prev_weight = curr->wrr.weight;
         curr->wrr.weight = (unsigned int) weight; // after bound check, casting is safe
+
         //rq weight modification //referenced from core.c task_rq_lock
         rq = task_rq(curr);
         raw_spin_lock(&rq->lock);
         if(likely(rq == task_rq(curr))){ //during spinlock spin it may have changed
+                raw_spin_lock(&rq->wrr.wrr_rq_lock);
                 rq->wrr.weight_sum -= prev_weight;
                 rq->wrr.weight_sum += curr->wrr.weight;
+                raw_spin_unlock(&rq->wrr.wrr_rq_lock);
         }
         raw_spin_unlock(&rq->lock);
-        printk(KERN_DEBUG "SET_WEIGHT task pid %d with weight %u",task_pid_nr(curr), curr->wrr.weight);
+        //printk(KERN_DEBUG "SET_WEIGHT task pid %d with weight %u",task_pid_nr(curr), curr->wrr.weight);
         return 0;
 }
 SYSCALL_DEFINE1(sched_getweight,pid_t, pid){
         struct task_struct * curr;
+        int sched_class_id;
+        //printk(KERN_INFO"sched_getweight");
         if(pid < 0){
                 return -EINVAL;
         }
@@ -150,11 +158,30 @@ SYSCALL_DEFINE1(sched_getweight,pid_t, pid){
         }
         else{
                 curr = find_task_by_vpid(pid);
+        if(curr->sched_class == &wrr_sched_class){
+                sched_class_id = 6;
+        }
+        else if(curr->sched_class == &fair_sched_class){
+                sched_class_id = 2;
+        }
+        else if(curr->sched_class == &rt_sched_class){
+                sched_class_id = 1;
+        }
+        else{
+                sched_class_id = 0;
+        }
+        /*
+         * printk(KERN_DEBUG "\ntask pid %d sched_class %d policy %d timeslice %d weight %d\n \
+                        on_rq %d run_list_empty %d [rq] : cpu %d nr_running %d\n \
+                        rq->wrr : weight_sum %lu number_running %lu\n", 
+                        task_pid_nr(curr), sched_class_id, curr->policy, curr->wrr.time_slice, curr->wrr.weight,
+                        curr->on_rq, list_empty(&curr->wrr.run_list), task_cpu(curr), task_rq(curr)->nr_running,
+                        task_rq(curr)->wrr.weight_sum, task_rq(curr)->wrr.number_of_task);
+                        */
                 if(curr == NULL)
                         return -EINVAL;
                 return curr->wrr.weight;
         }
-        printk(KERN_DEBUG "GET_WEIGHT task pid %d", pid);
 }
 // proj2 syscall definition end
 
@@ -1771,14 +1798,14 @@ void sched_fork(struct task_struct *p)
 	 */
 	if (unlikely(p->sched_reset_on_fork)) {
 		if (task_has_rt_policy(p)) {
-			//p->policy = SCHED_NORMAL;
-                        p->policy = SCHED_WRR; //Let wrr be default policy
+			p->policy = SCHED_NORMAL;
+                        //p->policy = SCHED_WRR; //Let wrr be default policy
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (p->policy == SCHED_NORMAL){
-                        p->policy = SCHED_WRR;
-                } else if (PRIO_TO_NICE(p->static_prio) < 0)
+		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
+                //else if (p->policy == SCHED_WRR){
+                        //p->policy = SCHED_WRR;
         
 		p->prio = p->normal_prio = __normal_prio(p);
 		set_load_weight(p);
@@ -3737,10 +3764,10 @@ void rt_mutex_setprio(struct task_struct *p, int prio)
 	if (running)
 		p->sched_class->put_prev_task(rq, p);
 
-	if (rt_prio(prio)&& p->policy != SCHED_WRR)
-		p->sched_class = &rt_sched_class;
-	else if (p->policy == SCHED_WRR)
+        if (p->policy == SCHED_WRR)
                 p->sched_class = &wrr_sched_class;
+        else if (rt_prio(prio))
+		p->sched_class = &rt_sched_class;
         else
 		p->sched_class = &fair_sched_class;
 
@@ -3941,6 +3968,8 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 #endif
 	}else if (p->policy == SCHED_WRR){
                 p->sched_class = &wrr_sched_class;
+#define DEFAULT_WEIGHT 10
+                p->wrr.weight = DEFAULT_WEIGHT;
 #ifdef CONFIG_SCHED_HMP
 		if (cpumask_equal(&p->cpus_allowed, cpu_all_mask))
 			do_set_cpus_allowed(p, &hmp_slow_cpu_mask);

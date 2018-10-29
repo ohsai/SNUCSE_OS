@@ -267,9 +267,11 @@ void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq* wrr_rq){
 	int print_class = -1;
 #define P(x) \
 	SEQ_printf(m, "  .%-30s: %Ld\n", #x, (long long)(wrr_rq->x))
-	SEQ_printf(m, "\nrt_rq[%d]:\n", cpu);
+	SEQ_printf(m, "\nwrr_rq[%d]:\n", cpu);
         P(weight_sum);
         P(number_of_task);
+        SEQ_printf(m, "%9s %9s %15s %10s %10s %10s\n","schedclas", "policy","process_name","pid","weight","time_slice" );
+        SEQ_printf(m, "--------------------------------------------\n");
 	list_for_each_entry_rcu(wrr_se, &wrr_rq->run_list, run_list) {
 	 	if(wrr_se == NULL) {
 	  		SEQ_printf(m ,"** sched_wrr_entity is NULL in queue\n");
@@ -282,10 +284,11 @@ void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq* wrr_rq){
 		if(p->sched_class == &fair_sched_class) print_class = 0;
 		if(p->sched_class == &wrr_sched_class) print_class = 6;
 		
-		SEQ_printf(m, "%9d %9d %15s %10d %10Ld %10Ld",
+		SEQ_printf(m, "%9d %9d %15s %10d %10Ld %10Ld\n",
 			print_class, p->policy, p->comm, p->pid, 
-		  (long long)wrr_se->weight, (long long)jiffies_to_msecs(wrr_se->time_slice) );
+		  (long long)p->wrr.weight, (long long)jiffies_to_msecs(p->wrr.time_slice) );
 	}
+        SEQ_printf(m, "--------------------------------------------\n");
 #undef P
 
 }
@@ -355,12 +358,12 @@ do {									\
 #undef P64
 #endif
 	spin_lock_irqsave(&sched_debug_lock, flags);
-	print_cfs_stats(m, cpu);
-	print_rt_stats(m, cpu);
+	//print_cfs_stats(m, cpu);
+	//print_rt_stats(m, cpu);
         print_wrr_stats(m, cpu);
 
 	rcu_read_lock();
-	print_rq(m, rq, cpu);
+	//print_rq(m, rq, cpu);
 	rcu_read_unlock();
 	spin_unlock_irqrestore(&sched_debug_lock, flags);
 	SEQ_printf(m, "\n");
