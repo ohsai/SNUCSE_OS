@@ -11,30 +11,58 @@
 #include <sys/syscall.h>
 
 #define SYSCALL_SET_SCHEDULER 156
+
 struct node {
         long long int value;
         struct node * next;
 };
 struct llist {
+        int size;
         struct node * head;
         struct node * curr;
 };
-void llist_insert(struct list * curlist){
+void llist_append(struct llist * curlist, long long int value){
+        struct node * newnode = (struct node *) malloc(sizeof(struct node));
+        newnode->value = value;
+        newnode->next = NULL;
+        curlist->curr->next = newnode;
+        curlist->curr = newnode;
+        curlist->size += 1;
 }
+void llist_init(struct llist * curlist){
+        struct node * newnode = (struct node *) malloc(sizeof(struct node));
+        curlist->head = newnode;
+        curlist->curr = curlist->head;
+        curlist->size = 0;
+}
+#define iterate_list(nodep, curlistp)    \
+        for (nodep = curlistp->head->next ; nodep != NULL; nodep = nodep->next)
 
 int trial_division(long long n){
         long long f = 2;
-        printf("factor of %lld : ",n);
+        long long original = n;
+        struct llist * curlist = (struct llist*) malloc(sizeof(struct llist));
+        struct node * node_e;
+        char * output;
+        llist_init(curlist);
         while(n > 1){
                 if(n % f == 0){
                         n = n / f;
-                        printf("%lld,",f);
+                        //printf("%lld,",f);
+                        llist_append(curlist,f);
                 }
                 else{
                         f += 1;
                 }
         }
-        printf("\n");
+        int j;
+        char* out = (char*) malloc(sizeof(long long int) * curlist->size + 400);
+        j = sprintf(out,"threadid %ld factor of %lld : ",syscall(__NR_gettid),original);
+        iterate_list(node_e, curlist){
+                        j += sprintf(out + j,"%lld,",node_e->value);
+        }
+        j += sprintf(out+j,"\n");
+        printf("%s",out);
         return 1;
 }
 #define WEIGHT_MAX 20
@@ -97,10 +125,10 @@ int main (int argc, char* argv[]) {
         for(i = WEIGHT_MAX -1; i >= 0; i--){
                 end_status = pthread_join(factor_thread[i], (void **)&status);
                 if(end_status == 0){
-                        printf("succeeded thread %d status %d\n",i, status);
+                        printf("succeeded thread of weight %d status %d\n",i, status);
                 }
                 else{
-                        printf("error on thread %d ret code %d \n",i, end_status);
+                        printf("error on thread of weight  %d ret code %d \n",i, end_status);
                         return -1;
                 }
         }
