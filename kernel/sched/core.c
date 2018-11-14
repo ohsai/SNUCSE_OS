@@ -90,75 +90,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
-// proj 2 system call definition
-#define WRR_WEIGHT_MAX 20
-#define WRR_WEIGHT_MIN 1
-#include <linux/cred.h>
-#include <linux/uidgid.h>
-const kuid_t root_uid = KUIDT_INIT(0);
-
-SYSCALL_DEFINE2(sched_setweight,pid_t, pid, int, weight){
-        struct task_struct * curr;
-        struct rq * rq;
-        unsigned int prev_weight;
-        // input bound check, pid to task
-        if(pid < 0){
-                return -EINVAL;
-        }
-        else if((WRR_WEIGHT_MIN >weight) || (WRR_WEIGHT_MAX < weight)){
-                return -EINVAL;
-
-        }
-        else if (pid == 0){
-                curr = current;
-        }
-        else{
-                curr = find_task_by_vpid(pid);
-                //curr = find_process_by_pid(pid);
-                if(curr == NULL)
-                        return -EINVAL;
-        }
-        //user permission check
-        if(!uid_eq(current_uid(), task_uid(curr)) && !uid_eq(current_uid(), root_uid)){
-                return -EPERM;
-        }
-        if(curr->wrr.weight < weight && !uid_eq(current_uid(), root_uid)){
-                //Only Administrator can increase the weight
-                return -EPERM;
-        }
-        //wrr entry weight modification
-        prev_weight = curr->wrr.weight;
-        curr->wrr.weight = (unsigned int) weight; // after bound check, casting is safe
-        //rq weight modification //referenced from core.c task_rq_lock
-        rq = task_rq(curr);
-        raw_spin_lock(&rq->lock);
-        if(likely(rq == task_rq(curr))){ //during spinlock spin it may have changed
-                rq->wrr.weight_sum -= prev_weight;
-                rq->wrr.weight_sum += curr->wrr.weight;
-        }
-        raw_spin_unlock(&rq->lock);
-        printk(KERN_DEBUG "SET_WEIGHT task pid %d with weight %u",task_pid_nr(curr), curr->wrr.weight);
-        return 0;
-}
-SYSCALL_DEFINE1(sched_getweight,pid_t, pid){
-        struct task_struct * curr;
-        if(pid < 0){
-                return -EINVAL;
-        }
-        else if (pid == 0){
-                return get_current()->wrr.weight;
-        }
-        else{
-                curr = find_task_by_vpid(pid);
-                if(curr == NULL)
-                        return -EINVAL;
-                return curr->wrr.weight;
-        }
-        printk(KERN_DEBUG "GET_WEIGHT task pid %d", pid);
-}
-// proj2 syscall definition end
-
-
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
 	unsigned long delta;
@@ -1705,7 +1636,6 @@ static void __sched_fork(struct task_struct *p)
 #endif
 
 	INIT_LIST_HEAD(&p->rt.run_list);
-        //INIT_LIST_HEAD(&p->wrr.run_list); //already on init_wrr_rq
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
@@ -1771,15 +1701,12 @@ void sched_fork(struct task_struct *p)
 	 */
 	if (unlikely(p->sched_reset_on_fork)) {
 		if (task_has_rt_policy(p)) {
-			//p->policy = SCHED_NORMAL;
-                        p->policy = SCHED_WRR; //Let wrr be default policy
+			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (p->policy == SCHED_NORMAL){
-                        p->policy = SCHED_WRR;
-                } else if (PRIO_TO_NICE(p->static_prio) < 0)
+		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
-        
+
 		p->prio = p->normal_prio = __normal_prio(p);
 		set_load_weight(p);
 
@@ -1789,9 +1716,8 @@ void sched_fork(struct task_struct *p)
 		 */
 		p->sched_reset_on_fork = 0;
 	}
-        if (p->policy == SCHED_WRR){
-                p->sched_class = &wrr_sched_class;
-        } else if (!rt_prio(p->prio))
+
+	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
 
 	if (p->sched_class->task_fork)
@@ -2842,7 +2768,6 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq, cpu);
-        wrr_load_balance(rq, cpu);
 #endif
 	rq_last_tick_reset(rq);
 }
@@ -2995,11 +2920,6 @@ pick_next_task(struct rq *rq)
 		if (likely(p))
 			return p;
 	}
-        if (likely(rq->nr_running == rq->wrr.number_of_task)){
-                p = wrr_sched_class.pick_next_task(rq);
-                if (likely(p))
-                        return p;
-        }
 
 	for_each_class(class) {
 		p = class->pick_next_task(rq);
@@ -3737,11 +3657,9 @@ void rt_mutex_setprio(struct task_struct *p, int prio)
 	if (running)
 		p->sched_class->put_prev_task(rq, p);
 
-	if (rt_prio(prio)&& p->policy != SCHED_WRR)
+	if (rt_prio(prio))
 		p->sched_class = &rt_sched_class;
-	else if (p->policy == SCHED_WRR)
-                p->sched_class = &wrr_sched_class;
-        else
+	else
 		p->sched_class = &fair_sched_class;
 
 	p->prio = prio;
@@ -3933,19 +3851,14 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->normal_prio = normal_prio(p);
 	/* we are holding p->pi_lock already */
 	p->prio = rt_mutex_getprio(p);
-	if (rt_prio(p->prio)&& p->policy != SCHED_WRR) {
+	if (rt_prio(p->prio)) {
 		p->sched_class = &rt_sched_class;
 #ifdef CONFIG_SCHED_HMP
 		if (cpumask_equal(&p->cpus_allowed, cpu_all_mask))
 			do_set_cpus_allowed(p, &hmp_slow_cpu_mask);
 #endif
-	}else if (p->policy == SCHED_WRR){
-                p->sched_class = &wrr_sched_class;
-#ifdef CONFIG_SCHED_HMP
-		if (cpumask_equal(&p->cpus_allowed, cpu_all_mask))
-			do_set_cpus_allowed(p, &hmp_slow_cpu_mask);
-#endif
-        }else
+	}
+	else
 		p->sched_class = &fair_sched_class;
 	set_load_weight(p);
 }
@@ -3988,7 +3901,7 @@ recheck:
 
 		if (policy != SCHED_FIFO && policy != SCHED_RR &&
 				policy != SCHED_NORMAL && policy != SCHED_BATCH &&
-				policy != SCHED_IDLE && policy != SCHED_WRR)
+				policy != SCHED_IDLE)
 			return -EINVAL;
 	}
 
@@ -4677,7 +4590,6 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 	case SCHED_RR:
 		ret = MAX_USER_RT_PRIO-1;
 		break;
-        case SCHED_WRR:
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
@@ -4703,7 +4615,6 @@ SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 	case SCHED_RR:
 		ret = 1;
 		break;
-        case SCHED_WRR:
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
@@ -7104,7 +7015,6 @@ void __init sched_init(void)
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs);
 		init_rt_rq(&rq->rt, rq);
-                init_wrr_rq(&rq->wrr);
 #ifdef CONFIG_FAIR_GROUP_SCHED
 		root_task_group.shares = ROOT_TASK_GROUP_LOAD;
 		INIT_LIST_HEAD(&rq->leaf_cfs_rq_list);
@@ -7198,8 +7108,7 @@ void __init sched_init(void)
 	/*
 	 * During early bootup we pretend to be a normal task:
 	 */
-	//current->sched_class = &fair_sched_class; //originally was this
-        current->sched_class = &wrr_sched_class;
+	current->sched_class = &fair_sched_class;
 
 #ifdef CONFIG_SMP
 	zalloc_cpumask_var(&sched_domains_tmpmask, GFP_NOWAIT);
@@ -7209,7 +7118,6 @@ void __init sched_init(void)
 	idle_thread_set_boot_cpu();
 #endif
 	init_sched_fair_class();
-        init_sched_wrr_class();
 
 	scheduler_running = 1;
 }
@@ -7380,7 +7288,6 @@ static void free_sched_group(struct task_group *tg)
 {
 	free_fair_sched_group(tg);
 	free_rt_sched_group(tg);
-        //free_wrr_sched_group(tg);
 	autogroup_free(tg);
 	kfree(tg);
 }
@@ -7875,7 +7782,7 @@ static int cpu_cgroup_can_attach(struct cgroup *cgrp,
 			return -EINVAL;
 #else
 		/* We don't support RT-tasks being in separate groups */
-		if (task->sched_class != &fair_sched_class && task->sched_class != &wrr_sched_class)
+		if (task->sched_class != &fair_sched_class)
 			return -EINVAL;
 #endif
 	}

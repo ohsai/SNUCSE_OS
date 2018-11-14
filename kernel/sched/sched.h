@@ -108,7 +108,6 @@ extern struct mutex sched_domains_mutex;
 
 struct cfs_rq;
 struct rt_rq;
-struct wrr_rq;
 
 extern struct list_head task_groups;
 
@@ -152,10 +151,7 @@ struct task_group {
 
 	struct rt_bandwidth rt_bandwidth;
 #endif
-#ifdef CONFIG_WRR_GROUP_SCHED
-        struct sched_wrr_entity ** wrr_se;
-        struct wrr_rq ** wrr_rq;
-#endif
+
 	struct rcu_head rcu;
 	struct list_head list;
 
@@ -328,15 +324,6 @@ static inline int rt_bandwidth_enabled(void)
 {
 	return sysctl_sched_rt_runtime >= 0;
 }
-/* Weighted Round Robin per-cpu runqueue */
-struct wrr_rq{
-        unsigned long weight_sum;
-        unsigned long number_of_task;
-        struct list_head run_list;
-        raw_spinlock_t wrr_rq_lock;
-        struct task_struct * cur_task;
-};
-
 
 /* Real-Time classes' related field in a runqueue: */
 struct rt_rq {
@@ -435,7 +422,6 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
-    struct wrr_rq wrr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
@@ -1042,14 +1028,13 @@ extern const struct sched_class stop_sched_class;
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
-extern const struct sched_class wrr_sched_class;
+
 
 #ifdef CONFIG_SMP
 
 extern void update_group_power(struct sched_domain *sd, int cpu);
 
 extern void trigger_load_balance(struct rq *rq, int cpu);
-extern void wrr_load_balance(struct rq * rq, int cpu);
 extern void idle_balance(int this_cpu, struct rq *this_rq);
 
 /*
@@ -1078,7 +1063,6 @@ extern void update_max_interval(void);
 extern int update_runtime(struct notifier_block *nfb, unsigned long action, void *hcpu);
 extern void init_sched_rt_class(void);
 extern void init_sched_fair_class(void);
-extern void init_sched_wrr_class(void);
 
 extern void resched_task(struct task_struct *p);
 extern void resched_cpu(int cpu);
@@ -1339,11 +1323,9 @@ extern struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq);
 extern struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq);
 extern void print_cfs_stats(struct seq_file *m, int cpu);
 extern void print_rt_stats(struct seq_file *m, int cpu);
-extern void print_wrr_stats(struct seq_file *m, int cpu);
 
 extern void init_cfs_rq(struct cfs_rq *cfs_rq);
 extern void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq);
-extern void init_wrr_rq(struct wrr_rq * wrr_rq);
 
 extern void cfs_bandwidth_usage_inc(void);
 extern void cfs_bandwidth_usage_dec(void);
