@@ -393,6 +393,7 @@
 		CALL(sys_rotlock_read)
 		CALL(sys_rotlock_write)
 		CALL(sys_rotunlock_read)
+		CALL(sys_ni_syscall)
 		CALL(sys_rotunlock_write)
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls

@@ -1,12 +1,7 @@
-#include <linux/list.h>
-
 #ifndef _LINUX_ROTATION_H
 #define _LINUX_ROTATION_H
 
-/*
- * pseudo device rotation degree
- */
-int ROTATION;
+#include <linux/list.h>
 
 /*
  * data structure for blocked read requests
@@ -14,6 +9,7 @@ int ROTATION;
 struct reader_struct {
 	int start;
 	int end;
+	struct task_struct * task;
 	struct list_head next;
 };
 
@@ -23,12 +19,13 @@ struct reader_struct {
 struct writer_struct {
 	int start;
 	int end;
+	struct task_struct * task;
 	struct list_head next;
-}
+};
 
 struct list_head wait_reader_list;
 struct list_head wait_writer_list;
 struct list_head run_reader_list;
 struct list_head run_writer_list;
 
-#endif /* _LINUX_ROTATION_H */
+#endif
