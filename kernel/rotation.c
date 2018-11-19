@@ -2,15 +2,88 @@
 #include <linux/kernel.h>
 #include <linux/unistd.h>
 #include <linux/rotation.h>
-//#include <linux/slab.h>
+#include <linux/slab.h>
 #include <uapi/asm-generic/errno-base.h>
 #include <linux/mutex.h>
 #include <linux/wait.h>
 #include <linux/types.h>
+#include <linux/list.h>
 
 #define TRUE_ROTATION 1
 #define FALSE_ROTATION 0
 
+// Concurrent Linked List Implementation
+/*
+typedef struct __node_t {
+        int key;
+        struct __node_t *next;
+} node_t;
+typedef struct __list_t {
+        node_t *head;
+        pthread_mutex_t lock;
+} list_t;
+void List_Init(list_t * L){
+        L->head = NULL;
+        pthread_mutex_init(&L->lock, NULL);
+}
+int List_Insert(list_t *L, int key){
+        node_t * new = malloc(sizeof(node_t));
+        if(new == NULL){
+                perror("malloc");
+                return -1;
+        new->key = key;
+        pthread_mutex_lock (&L->lock);
+        new->next = L->head;
+        L->head = new;
+        pthread_mutex_unlock(&L->lock);
+        return 0;
+}
+int List_Lookup(list_t *L, int key){
+        int rv = -1;
+        pthread_mutex_lock(&L->lock);
+        node_t *curr = L->head;
+        while(curr){
+                if(curr->key == key){
+                        rv = 0;
+                        break;
+                }
+                curr = curr->next;
+        }
+        pthread_mutex_unlock(&L->lock);
+        return rv;
+}
+int List_Delete(list_t *L, int key){
+        node_t * prev;
+        node_t *curr = L->head;
+        if(curr && cur->key == key){
+                L->head = curr->next;
+                free(curr);
+                return 0;
+        }
+        while(curr && curr->data != key){
+                prev = curr;
+                curr = curr->next;
+        }
+        if(curr == NULL)
+                return -1;
+        prev->next = curr->next;
+        free(curr);
+        return 0;
+}
+*/
+typedef struct __range_descriptor {
+        int degree;
+        int range;
+        int type; //0 read 1 write
+        int pid;
+        struct list_head list;
+} range_descriptor;
+
+LIST_HEAD(range_descriptor_list);
+DEFINE_MUTEX(rdlist_mutex);
+
+
+// Helper function Implementation
 int start_range (int degree, int range) {
 	return (degree >= range) ? degree-range : 360 + degree - range;
 }
@@ -78,13 +151,63 @@ void cond_broadcast(wait_queue_head_t * wq){
 void cond_signal(wait_queue_head_t * wq){
         wake_up(wq);
 }
+int rdlist_lookup(int degree){
+        range_descriptor * cur_rd;
+        int reader_awake = 0;
+        int writer_awake = 0;
+        //int output;
+        int start;
+        int end;
+        mutex_lock(&rdlist_mutex);
+        list_for_each_entry(cur_rd, &range_descriptor_list,list){
+                start = start_range(cur_rd->degree, cur_rd->range);
+                end = end_range(cur_rd->degree, cur_rd->range);
+                if(rotation_degree_valid(degree, start, end)){
+                printk(KERN_DEBUG"lookup|valid| degree %d start %d end %d\n", degree, start, end);
+                        if(cur_rd->type == 0){ 
+                                // reader
+                                reader_awake++;
+                        }
+                        else{
+                                writer_awake++;
+                        }
+                }
+                else{
+                printk(KERN_DEBUG"lookup|invalid| degree %d start %d end %d\n", degree, start, end);
+                }
+        }
+        mutex_unlock(&rdlist_mutex);
+        if(writer_awake > 0){
+                return 1;
+        }
+        else if(reader_awake > 0){
+                return reader_awake;
+        }
+        else{
+                return 0;
+        }
+}
+int rdlist_add(int pid, int degree, int range, int type){
+        range_descriptor * cur_rd = kmalloc(sizeof(range_descriptor), GFP_KERNEL);
+        if(!cur_rd) return -ENOMEM;
+        cur_rd->degree = degree;
+        cur_rd->range = range;
+        cur_rd->type = type;
+        cur_rd->pid = pid;
+        mutex_lock(&rdlist_mutex);
+        list_add(&cur_rd->list,&range_descriptor_list);
+        mutex_unlock(&rdlist_mutex);
+        return 0;
+}
 
 SYSCALL_DEFINE1(set_rotation, int, degree) {
+        int task_awake;
 	if (!arg_ok(degree,90))
 		return ERR_FAILURE;
+        task_awake =  rdlist_lookup(degree);
         mutex_lock(&proc_mutex);
         cur_rotation_degree = degree;
-        printk(KERN_DEBUG"set_rotation called with degree %d current lock %d read_count %d \n",cur_rotation_degree,mutex_is_locked(&lock),atomic_read(&read_count));
+        printk(KERN_DEBUG"set_rotation|degree %d lock %d read_count %d task_awake %d \n",cur_rotation_degree,mutex_is_locked(&lock),atomic_read(&read_count), task_awake);
         cond_broadcast(&cv_onrange);
         cond_broadcast(&cv_outrange);
         mutex_unlock(&proc_mutex);
@@ -103,6 +226,13 @@ SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
                 return ERR_FAILURE;
         start = start_range(degree,range);
         end = end_range(degree,range);
+
+        // range descriptor adding
+        if(rdlist_add(current->pid, degree, range, 0) != 0){
+                printk(KERN_DEBUG"rdlist_add %d %d %d %d failed!\n",current->pid, degree, range, 0);
+        }
+        
+        //Manage concurrency 
         mutex_lock(&proc_mutex);
         while(TRUE_ROTATION){
                 if(rotation_degree_valid(cur_rotation_degree,start,end)){
@@ -137,6 +267,13 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
                 return ERR_FAILURE;
         start = start_range(degree,range);
         end = end_range(degree,range);
+        
+        // range descriptor adding
+        if(rdlist_add(current->pid, degree, range, 1) != 0){
+                printk(KERN_DEBUG"rdlist_add %d %d %d %d failed!\n",current->pid, degree, range, 1);
+        }
+
+        //Manage concurrency 
         mutex_lock(&proc_mutex);
         while(TRUE_ROTATION){
                 if(rotation_degree_valid(cur_rotation_degree,start,end)){
@@ -178,9 +315,31 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
  * 383
  */
 
+int rdlist_del(int pid, int degree, int range, int type){
+        range_descriptor * cur_rd;
+        mutex_lock(&rdlist_mutex);
+        list_for_each_entry(cur_rd, &range_descriptor_list,list){
+                if(cur_rd->pid == pid &&
+                                cur_rd->degree == degree &&
+                                cur_rd->range == range &&
+                                cur_rd->type == type){
+                        list_del(&cur_rd->list);
+                        kfree(cur_rd);
+                        mutex_unlock(&rdlist_mutex);
+                        return 0;
+                }
+        }
+        mutex_unlock(&rdlist_mutex);
+        return -1;
+}
+
+
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
-        printk(KERN_DEBUG"read_unlock called, read_count %d\n", atomic_read(&read_count));
+        if(rdlist_del(current->pid,degree,range,0) != 0){
+                printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 0);
+        }
         mutex_lock(&proc_mutex);
+        printk(KERN_DEBUG"read_unlock called, read_count %d\n", atomic_read(&read_count));
         //decrement r
         atomic_sub(1,&read_count);
         //mutex_unlock(&lock);
@@ -197,6 +356,9 @@ SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
 
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range) {
         printk(KERN_DEBUG"Rotunlock_write called, read_count %d\n",atomic_read(&read_count));
+        if(rdlist_del(current->pid,degree,range,1) != 0){
+                printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 1);
+        }
         mutex_lock(&proc_mutex);
         mutex_unlock(&lock);
         //lock = 0;

@@ -14,6 +14,12 @@ sh4.2$ ./rotd
 sh4.2$ ./selector [number] & ./trial 1 & ./trial 2 & ./trial 3 & 
 sh4.2$ dmesg | tail -n 20
 sh4.2$ killall trial && killall selector
+
+WHY IS THIS CRAZY??? -- TRY TO DO
+
+selector 28374 & ./trial 1 & ./trial 2 & ./trial 3 &
+dmesg | grep "lookup\|set_rotation"
+
 ```  
 
 selector / trial example works well currently.  
