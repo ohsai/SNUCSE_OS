@@ -233,7 +233,7 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
 	mutex_lock(&proc_mutex);
 	ROTATION = degree;
 
-	cond_broadcast(&write_cond);
+//	cond_broadcast(&write_cond);
 	list_for_each(p, &wait_writer_list) {
 		w = list_entry(p, struct writer_struct, next);
 		start = w->start;
@@ -247,6 +247,7 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
 
 	// writer unblocked
 	if (unblocked != 0) {
+		cond_broadcast(&write_cond);
 		mutex_unlock(&proc_mutex);
 		return unblocked;
 	}
