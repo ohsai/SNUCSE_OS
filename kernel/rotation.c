@@ -29,9 +29,9 @@ int end_range (int degree, int range) {
 
 int arg_ok (int degree, int range) {
 	if (degree < 0 || degree >= 360 || range  < 0 || range  >= 180)
-		return -1;
-	else
 		return 0;
+	else
+		return 1;
 }
 
 void cond_wait(wait_queue_head_t * wq, struct mutex * mutex) {
@@ -99,7 +99,7 @@ void reader_run_move(struct list_head * p) {
 }
 
 void writer_run_move(struct list_head * p) {
-	list_move_tail(p, &run_reader_list);
+	list_move_tail(p, &run_writer_list);
 }
 
 int read_overlap(int start, int end) {
@@ -238,7 +238,7 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
 	}
 
 	// writer unblocked
-	if (unblocked == 0) {
+	if (unblocked != 0) {
 		mutex_unlock(&proc_mutex);
 		return unblocked;
 	}
