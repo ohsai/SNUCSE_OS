@@ -29,8 +29,6 @@ int main(int argc, char* argv[]){
 			printf("selector: %d\n", inputInt);
 			inputInt++;
 			fclose(fp);
-			unlock = syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
-			printf("write unlock: %d\n", unlock);
 		}
 		else printf("failed\n");
 		sleep(1);

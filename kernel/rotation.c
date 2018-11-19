@@ -5,7 +5,7 @@
 # include <linux/slab.h>
 # include <linux/mutex.h>
 # include <linux/wait.h>
-
+# include <linux/sched.h>
 
 int ROTATION = 0;
 LIST_HEAD(wait_reader_list);
@@ -75,6 +75,7 @@ int degree_validity(int degree, int start, int end) {
 struct list_head * reader_wait_add (int _start, int _end) {
 	struct reader_struct * new_reader 
 		= kmalloc(sizeof(struct reader_struct), GFP_KERNEL);
+	new_reader->pid = task_pid_nr(current);
 	new_reader->start = _start;
 	new_reader->end = _end;
 	INIT_LIST_HEAD(&new_reader->next);
@@ -86,6 +87,7 @@ struct list_head * reader_wait_add (int _start, int _end) {
 struct list_head * writer_wait_add (int _start, int _end) {
 	struct writer_struct * new_writer 
 		= kmalloc(sizeof(struct writer_struct), GFP_KERNEL);
+	new_writer->pid = task_pid_nr(current);
 	new_writer->start = _start;
 	new_writer->end = _end;
 	INIT_LIST_HEAD(&new_writer->next);
@@ -164,7 +166,7 @@ int write_overlap(int start, int end) {
 
 int unlock_valid(int degree, int range, int type) {
 	int start; int end;
-	int s_s; int s_e;
+	int s_s; int s_e; pid_t pid;
 	struct list_head * p;
 	struct list_head * q;
 	struct reader_struct *r;
@@ -178,8 +180,11 @@ int unlock_valid(int degree, int range, int type) {
 			r = list_entry(p, struct reader_struct, next);
 			s_s = r->start;
 			s_e = r->end;
+			pid = r->pid;
 
-			if(s_s == start && s_e == end) {
+			if(s_s == start && 
+			   s_e == end   && 
+			   pid == task_pid_nr(current)) {
 				list_del(&r->next);
 				kfree(r);
 				return 1;
@@ -191,8 +196,11 @@ int unlock_valid(int degree, int range, int type) {
 			w = list_entry(p, struct writer_struct, next);
 			s_s = w->start;
 			s_e = w->end;
+			pid = w->pid;
 
-			if(s_s == start && s_e == end) {
+			if(s_s == start && 
+			   s_e == end   &&
+			   pid == task_pid_nr(current)) {
 				list_del(&w->next);
 				kfree(w);
 				return 1;
@@ -277,7 +285,8 @@ SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
 	p = reader_wait_add(start, end);
 	while(true) {
 		if (degree_validity(ROTATION, start, end) &&
-			read_overlap(start, end)) {
+			read_overlap(start, end) &&
+			mutex_trylock(&lock)) {
 			reader_run_move(p);
 			break;
 		}
@@ -308,8 +317,8 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
 	p = writer_wait_add(start, end);
 	while(true) {
 		if (degree_validity(ROTATION, start, end) &&
-			write_overlap(start, end)) {
-			mutex_lock(&lock);
+			write_overlap(start, end) &&
+			mutex_trylock(&lock)) {
 			writer_run_move(p);
 			break;
 		}
@@ -328,10 +337,12 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
 	mutex_lock(&proc_mutex);
 	if (unlock_valid(degree, range, 0) == 0) {
+		mutex_unlock(&lock);
 		mutex_unlock(&proc_mutex);
 		return -1;
 	}
 
+	mutex_unlock(&lock);
 	mutex_unlock(&proc_mutex);
 	return 0;
 }
@@ -342,11 +353,13 @@ SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
 
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range) {
 	mutex_lock(&proc_mutex);
-	mutex_unlock(&lock);
 	if (unlock_valid(degree, range, 1) == 0) {
+		mutex_unlock(&lock);
 		mutex_unlock(&proc_mutex);
 		return -1;
 	}
+
+	mutex_unlock(&lock);
 	mutex_unlock(&proc_mutex);
 	return 0;
 }

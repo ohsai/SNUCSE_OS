@@ -6,7 +6,9 @@
 /*
  * data structure for blocked read requests
  */
+
 struct reader_struct {
+	pid_t pid;
 	int start;
 	int end;
 	struct task_struct * task;
@@ -17,6 +19,7 @@ struct reader_struct {
  * data structure for blocked write requests
  */
 struct writer_struct {
+	pid_t pid;
 	int start;
 	int end;
 	struct task_struct * task;

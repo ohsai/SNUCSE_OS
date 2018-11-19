@@ -59,7 +59,6 @@ int main(int argc, char* argv[]){
 			fclose(fp);
 			}
 			unlock = syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
-			printf("read unlock: %d\n", unlock);
 		}
 		sleep(1);
 	}
