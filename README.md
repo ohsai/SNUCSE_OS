@@ -1,6 +1,12 @@
 # osfall2018-team3 Project 3. Rotation Read-Write Lock 
 
-## Policy
+## Rotation Lock Policies
+ 1. Read/Write requests can hold locks when rotation device degree is located between requests' range.
+ 2. **No starvation for write requests.** Write requests have higher priority to hold lock than read requests.
+ 3. Multiple readers can access the critical section unless there is a write request in the critical section.
+ 4. There can be only one write request in the critical section, and no other requests are allowed during that.
+ 5. When users try to unlock requests, they should input **exact same degree and range value** used in previous lock.
+ 6. Rotation lock/unlock should work well even when the rotation device is turned off.
 
 ## Implementation
 * Data Structures & Sync Primitives for Policy
@@ -47,7 +53,7 @@
     ```
     
   * Sync Primitives
-    ```
+    ```c
       DECLARE_WAIT_QUEUE_HEAD(cv_onrange); // wait_queue for requests on degree range
       DECLARE_WAIT_QUEUE_HEAD(cv_outrange); // wait_queue for requests out of degree range
       DEFINE_MUTEX(lock); // Block read requests while write request is being processed.
@@ -77,7 +83,7 @@
     }
   ```
       
-* `set_rotation` : Set rotation value for daemon device. System Call 380.
+* `set_rotation` : Set rotation value from daemon device. System Call 380.
 
 ```c
   SYSCALL_DEFINE1(set_rotation, int, degree) {
@@ -109,7 +115,7 @@
     mutex_lock(&proc_mutex);
     while(TRUE_ROTATION) {
       if(rotation_degree_valid(cur_rotation_degree, start, end)) {
-        if(!mutex_is_locked(&lock)) { // No write request is being processed
+        if(!mutex_is_locked(&lock)) { // Wait until no write request is being processed
           break;
         }
         else {
@@ -121,13 +127,13 @@
       }
     }
     
-    atomic_add(1, &read_count);
+    atomic_add(1, &read_count); // read_count++
     mutex_unlock(&proc_mutex);
     return 0;
   }
 ```
 
-* `rotlock_Write` : Hold lock for write request. System Call 382.
+* `rotlock_write` : Hold lock for write request. System Call 382.
 
 ```c
   SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
@@ -181,7 +187,7 @@
     ...
     
     mutex_lock(&proc_mutex);
-    atomic_sub(1,&read_count);
+    atomic_sub(1,&read_count); // read_count--
     cond_signal(&cv_onrange);
     mutex_unlock(&proc_mutex);
     return 0;
@@ -197,7 +203,7 @@
     ...
     
     mutex_lock(&proc_mutex);
-    mutex_unlock(&lock);
+    mutex_unlock(&lock); // Release lock for write request
     cond_broadcast(&cv_onrange);
     mutex_unlock(&proc_mutex);
     return 0;
