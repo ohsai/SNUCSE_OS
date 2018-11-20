@@ -13,64 +13,6 @@
 #define FALSE_ROTATION 0
 
 // Concurrent Linked List Implementation
-/*
-typedef struct __node_t {
-        int key;
-        struct __node_t *next;
-} node_t;
-typedef struct __list_t {
-        node_t *head;
-        pthread_mutex_t lock;
-} list_t;
-void List_Init(list_t * L){
-        L->head = NULL;
-        pthread_mutex_init(&L->lock, NULL);
-}
-int List_Insert(list_t *L, int key){
-        node_t * new = malloc(sizeof(node_t));
-        if(new == NULL){
-                perror("malloc");
-                return -1;
-        new->key = key;
-        pthread_mutex_lock (&L->lock);
-        new->next = L->head;
-        L->head = new;
-        pthread_mutex_unlock(&L->lock);
-        return 0;
-}
-int List_Lookup(list_t *L, int key){
-        int rv = -1;
-        pthread_mutex_lock(&L->lock);
-        node_t *curr = L->head;
-        while(curr){
-                if(curr->key == key){
-                        rv = 0;
-                        break;
-                }
-                curr = curr->next;
-        }
-        pthread_mutex_unlock(&L->lock);
-        return rv;
-}
-int List_Delete(list_t *L, int key){
-        node_t * prev;
-        node_t *curr = L->head;
-        if(curr && cur->key == key){
-                L->head = curr->next;
-                free(curr);
-                return 0;
-        }
-        while(curr && curr->data != key){
-                prev = curr;
-                curr = curr->next;
-        }
-        if(curr == NULL)
-                return -1;
-        prev->next = curr->next;
-        free(curr);
-        return 0;
-}
-*/
 typedef struct __range_descriptor {
         int degree;
         int range;
@@ -337,14 +279,12 @@ int rdlist_del(int pid, int degree, int range, int type){
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
         if(rdlist_del(current->pid,degree,range,0) != 0){
                 printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 0);
+                return -1;
         }
         mutex_lock(&proc_mutex);
         printk(KERN_DEBUG"read_unlock called, read_count %d\n", atomic_read(&read_count));
         //decrement r
         atomic_sub(1,&read_count);
-        //mutex_unlock(&lock);
-        //lock = 0;
-        //cond_broadcast(&cv_onrange);
         cond_signal(&cv_onrange);
         mutex_unlock(&proc_mutex);
         return 0;
@@ -358,6 +298,7 @@ SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range) {
         printk(KERN_DEBUG"Rotunlock_write called, read_count %d\n",atomic_read(&read_count));
         if(rdlist_del(current->pid,degree,range,1) != 0){
                 printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 1);
+                return -1;
         }
         mutex_lock(&proc_mutex);
         mutex_unlock(&lock);
