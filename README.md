@@ -1,14 +1,14 @@
 # osfall2018-team3 Project 3. Rotation Read-Write Lock 
 
-## Rotation Lock Policies
+### Rotation Lock Policies
  1. Read/Write requests can hold locks when rotation device degree is located between requests' range.
  2. **No starvation for write requests.** Write requests have higher priority to hold lock than read requests.
  3. Multiple readers can access the critical section unless there is a write request in the critical section.
- 4. There can be only one write request in the critical section, and no other requests are allowed during that.
+ 4. If there is one write request in the critical section, then no other requests are allowed to enter the critical section.
  5. When users try to unlock requests, they should input **exact same degree and range value** used in previous lock.
  6. Rotation lock/unlock should work well even when the rotation device is turned off.
 
-## Implementation
+### Implementation
 * Data Structures & Sync Primitives for Policy
 
   * `range_descriptor` : It stores read/write requests info, and is put on the list.
@@ -24,7 +24,7 @@
     
     ```c
       LIST_HEAD(range_descriptor_list);
-      DEFINE_MUTEX(rdlist_mutex);
+      DEFINE_MUTEX(rdlist_mutex); // lock for mutually exclusive access in range descriptor list
     ```
     
     ```c
@@ -46,7 +46,7 @@
        * rdlist_lookup traverses range_descriptor_list and counts requests
        * which can hold lock in given degree. If write can awake, it returns
        * only 1. It returns the number of awakable read requests unless there
-       * is possible write request.
+       * is any possible write request.
        */
        
        int rdlist_lookup(int degree);
@@ -60,7 +60,7 @@
       DEFINE_MUTEX(proc_mutex); // Assure the mutual exclusion among rotation lock/unlock.
       atomic_t read_count = ATOMIC_INIT(0);
     ```
-  * Condition Variable Functions : Implement condition variable using `wait_queue`.
+  * Condition Variable Functions : Newly implemented condition variable using `wait_queue`.
   ```c
     void cond_wait(wait_queue_head_t * wq, struct mutex * mutex) {
       DEFINE_WAIT(__wait);
@@ -83,7 +83,7 @@
     }
   ```
       
-* `set_rotation` : Set rotation value from daemon device. System Call 380.
+* `set_rotation` : Set the rotation value from daemon device. System Call 380.
 
 ```c
   SYSCALL_DEFINE1(set_rotation, int, degree) {
@@ -93,6 +93,7 @@
     task_awake = rdlist_lookup(degree);
     mutex_lock(&proc_mutex);
     cur_rotation_degree = degree; // Global Variable tracking current degree
+    printk(KERN_DEBUG"set_rotation|degree %d lock %d read_count %d task_awake %d\n", cur_rotation_degree, mutex_is_locked(&lock), atomic_read(&read_count), task_awake);
     cond_broadcast(&cv_onrange);
     cond_broadcast(&cv_outrange);
     mutex_unlock(&proc_mutex);
@@ -210,23 +211,86 @@
   }
 ```
 
-## Test
+### Test
 
-rotd daemon, selector and trial  
-```console
-foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/rotd.c -o ./test/rotd  
-foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/selector.c -o ./test/selector
-foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/trial.c -o ./test/trial
+* `rotd` daemon : This daemon updates degree value in every 2 seconds and calls the `set_rotation` system call.
 
-sh4.2$ ./rotd
-sh4.2$ ./selector [number] & ./trial 1 & ./trial 2 & ./trial 3 & 
-sh4.2$ dmesg | tail -n 20
-sh4.2$ killall trial && killall selector
+* `selector` : While running, it writes incrementing number from given argument on `integer.txt` in every 1 second.
+               It uses `rotlock_write` and `rotunlock_write` system calls.
+               
+               ```c
+                 int main(int argc, char* argv[]){
 
-selector 28374 & ./trial 1 & ./trial 2 & ./trial 3 &
-dmesg | grep "lookup\|set_rotation"
+                 ...
 
-```  
+                  while(run){
+                   if(syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) == 0){
 
-selector / trial example works well currently.  
+                    f = fopen("integer.txt", "w");
+                    fprintf(f, "%d", input);
+                    fclose(f);
+
+                    printf("selector: %d\n", input);
+                    input++;
+                    syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
+
+                   }
+                   else
+                     printf("error!\n");
+                   sleep(1);
+                  }
+
+                  return 0;
+                 }              
+               ```
+               
+* `trial` : While running, it reads the integer value from `integer.txt` and does *trial divison* on that number in every 1 second.
+            It uses `rotlock_read`, `rotunlock_read`, and receives an integer argument as id.
+            
+            ```c
+            int main(int argc, char* argv[]){
+
+              int input = atoi(argv[1]);
+              
+              ...
+              
+              int value;
+              while(run){
+                if(syscall(SYSCALL_ROTLOCK_READ, 90, 90) == 0){
+                  if(NULL != (f = fopen("integer.txt", "r"))){
+                    fscanf(f, "%d", &value);
+                    fclose(f);
+
+                    printf("trial-%d: ", input);
+                    trial_division(value);
+                  }
+
+                  syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
+                }	
+                sleep(1);
+              }
+
+              return 0;
+            }
+            ```
+
+* How to do the test.
+
+  * Compile test files
+  
+  ```console
+  foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/rotd.c -o ./test/rotd  
+  foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/selector.c -o ./test/selector
+  foo@bar:~/osfall2018-team3$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/trial.c -o ./test/trial
+  ```
+  
+  * Test on Tizen board
+  ```console
+  sh4.2$ ./rotd
+  sh4.2$ ./selector [number] & (...) & ./trial 1 & (...) &
+  sh4.2$ dmesg | tail -n 20
+  sh4.2$ dmesg | grep "lookup\|set_rotation"
+  sh4.2$ killall trial && killall selector
+
+  ```  
 
