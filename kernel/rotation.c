@@ -74,7 +74,6 @@ atomic_t read_count = ATOMIC_INIT(0);
 
 void cond_wait(wait_queue_head_t * wq, struct mutex * mutex){
         DEFINE_WAIT(__wait);
-        //prepare_to_wait(wq,&__wait,TASK_UNINTERRUPTIBLE); 
         prepare_to_wait(wq,&__wait,TASK_INTERRUPTIBLE); 
         // TASK_INTERRUPTIBLE then signal_pending needed
         mutex_unlock(mutex);
@@ -97,7 +96,6 @@ int rdlist_lookup(int degree){
         range_descriptor * cur_rd;
         int reader_awake = 0;
         int writer_awake = 0;
-        //int output;
         int start;
         int end;
         mutex_lock(&rdlist_mutex);
@@ -105,7 +103,6 @@ int rdlist_lookup(int degree){
                 start = start_range(cur_rd->degree, cur_rd->range);
                 end = end_range(cur_rd->degree, cur_rd->range);
                 if(rotation_degree_valid(degree, start, end)){
-                printk(KERN_DEBUG"lookup|valid| degree %d start %d end %d\n", degree, start, end);
                         if(cur_rd->type == 0){ 
                                 // reader
                                 reader_awake++;
@@ -115,7 +112,6 @@ int rdlist_lookup(int degree){
                         }
                 }
                 else{
-                printk(KERN_DEBUG"lookup|invalid| degree %d start %d end %d\n", degree, start, end);
                 }
         }
         mutex_unlock(&rdlist_mutex);
@@ -149,7 +145,6 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
         task_awake =  rdlist_lookup(degree);
         mutex_lock(&proc_mutex);
         cur_rotation_degree = degree;
-        printk(KERN_DEBUG"set_rotation|degree %d lock %d read_count %d task_awake %d \n",cur_rotation_degree,mutex_is_locked(&lock),atomic_read(&read_count), task_awake);
         cond_broadcast(&cv_onrange);
         cond_broadcast(&cv_outrange);
         mutex_unlock(&proc_mutex);
@@ -163,7 +158,6 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
 SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
         int start;
         int end;
-        printk(KERN_DEBUG"Rotlock_read called\n");
         if(!arg_ok(degree, range))
                 return ERR_FAILURE;
         start = start_range(degree,range);
@@ -171,14 +165,12 @@ SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
 
         // range descriptor adding
         if(rdlist_add(current->pid, degree, range, 0) != 0){
-                printk(KERN_DEBUG"rdlist_add %d %d %d %d failed!\n",current->pid, degree, range, 0);
         }
         
         //Manage concurrency 
         mutex_lock(&proc_mutex);
         while(TRUE_ROTATION){
                 if(rotation_degree_valid(cur_rotation_degree,start,end)){
-                        printk(KERN_DEBUG"readlock|valid|cur : %d, start : %d, end : %d, lock: %d read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock),atomic_read(&read_count));
                         if(!mutex_is_locked(&lock)){ //w condition check
                                 break;
                         }
@@ -187,7 +179,6 @@ SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
                         }
                 }
                 else{
-                printk(KERN_DEBUG"readlock|invalid|cur : %d, start : %d, end : %d, lock : %d, read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock),atomic_read(&read_count));
                         cond_wait(&cv_outrange,&proc_mutex);
                 }
         }
@@ -204,7 +195,6 @@ SYSCALL_DEFINE2(rotlock_read, int, degree, int, range) {
 SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
         int start;
         int end;
-        printk(KERN_DEBUG"Rotlock_write called\n");
         if(!arg_ok(degree, range))
                 return ERR_FAILURE;
         start = start_range(degree,range);
@@ -212,14 +202,12 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
         
         // range descriptor adding
         if(rdlist_add(current->pid, degree, range, 1) != 0){
-                printk(KERN_DEBUG"rdlist_add %d %d %d %d failed!\n",current->pid, degree, range, 1);
         }
 
         //Manage concurrency 
         mutex_lock(&proc_mutex);
         while(TRUE_ROTATION){
                 if(rotation_degree_valid(cur_rotation_degree,start,end)){
-                        printk(KERN_DEBUG"writelock|valid|cur : %d, start : %d, end : %d, lock: %d, read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock),atomic_read(&read_count));
                         if(mutex_trylock(&lock)){ //atomic lock check and acquire 
                                 // w condition check and set w to true
                                 break;
@@ -229,13 +217,11 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
                         }
                 }
                 else{
-                printk(KERN_DEBUG"writelock|invalid|cur : %d, start : %d, end : %d, lock : %d, read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock),atomic_read(&read_count));
                         cond_wait(&cv_outrange,&proc_mutex);
                 }
         }
         while(TRUE_ROTATION){
                 if(rotation_degree_valid(cur_rotation_degree,start,end)){
-                        printk(KERN_DEBUG"writelock|valid|cur : %d, start : %d, end : %d, lock: %d, read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock), atomic_read(&read_count));
                         if(atomic_read(&read_count) <= 0){ //while r > 0 => break if r <= 0
                                 break;
                         }
@@ -244,11 +230,9 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range) {
                         }
                 }
                 else{
-                printk(KERN_DEBUG"writelock|invalid|cur : %d, start : %d, end : %d, lock : %d, read_count %d\n",cur_rotation_degree, start,end,mutex_is_locked(&lock), atomic_read(&read_count));
                         cond_wait(&cv_outrange,&proc_mutex);
                 }
         }
-        //lock = 1;
         mutex_unlock(&proc_mutex);
         return 0;
 }
@@ -278,11 +262,9 @@ int rdlist_del(int pid, int degree, int range, int type){
 
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
         if(rdlist_del(current->pid,degree,range,0) != 0){
-                printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 0);
                 return -1;
         }
         mutex_lock(&proc_mutex);
-        printk(KERN_DEBUG"read_unlock called, read_count %d\n", atomic_read(&read_count));
         //decrement r
         atomic_sub(1,&read_count);
         cond_signal(&cv_onrange);
@@ -291,18 +273,15 @@ SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range) {
 }
 
 /*
- * 384
+ * 385
  */
 
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range) {
-        printk(KERN_DEBUG"Rotunlock_write called, read_count %d\n",atomic_read(&read_count));
         if(rdlist_del(current->pid,degree,range,1) != 0){
-                printk(KERN_DEBUG"rdlist_del %d %d %d %d failed!\n",current->pid, degree, range, 1);
                 return -1;
         }
         mutex_lock(&proc_mutex);
         mutex_unlock(&lock);
-        //lock = 0;
         cond_broadcast(&cv_onrange);
         mutex_unlock(&proc_mutex);
         return 0;
