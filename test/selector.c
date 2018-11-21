@@ -7,33 +7,36 @@
 #define SYSCALL_ROTLOCK_WRITE 382
 #define SYSCALL_ROTUNLOCK_WRITE 385
 
-static volatile int keepRunning = 1;
+static volatile int run = 1;
 
-void intHandler(int dummy) {
-	keepRunning = 0;
+void sigint_handler(int tmp) {
+	run = 0;
+	syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
 }
 
 int main(int argc, char* argv[]){
-	FILE *fp;
-	int inputInt = atoi(argv[1]);
-        //printf("selector \n");
+
+	int input = atoi(argv[1]);
+    FILE *f;
 	
-	signal(SIGINT, intHandler);
-        printf("selector \n");
-	while(keepRunning){
+	signal(SIGINT, sigint_handler);
+
+	while(run){
 		if(syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) == 0){
-                        printf("succeeded\n");
-			fp = fopen("integer.txt", "w");
-			fprintf(fp, "%d", inputInt);
-			printf("selector: %d\n", inputInt);
-			inputInt++;
-			fclose(fp);
+
+			f = fopen("integer.txt", "w");
+			fprintf(f, "%d", input);
+			fclose(f);
+            
+			printf("selector: %d\n", input);
+			input++;
 			syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
-		}
-		else printf("failed\n");
-		sleep(1);
+
+		}else{
+          printf("error!\n");
+        }
+        sleep(1);
 	}
-        
 
 	return 0;
 }
