@@ -98,7 +98,7 @@
     cond_broadcast(&cv_outrange);
     mutex_unlock(&proc_mutex);
     
-    return 0;
+    return task_awake;
   }
 ```
 

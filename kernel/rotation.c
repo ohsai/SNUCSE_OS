@@ -153,7 +153,7 @@ SYSCALL_DEFINE1(set_rotation, int, degree) {
         cond_broadcast(&cv_onrange);
         cond_broadcast(&cv_outrange);
         mutex_unlock(&proc_mutex);
-        return 0;
+        return task_awake;
 }
 
 /*
