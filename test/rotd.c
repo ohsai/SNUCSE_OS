@@ -15,7 +15,6 @@ void term(int signum)
 
 void sensor()
 {
-	int i;
 	/* setup for handling SIGTERM signal */
 	struct sigaction action;
 	memset(&action, 0, sizeof(struct sigaction));

@@ -1,34 +1,41 @@
 #ifndef _LINUX_ROTATION_H
 #define _LINUX_ROTATION_H
+//#include <linux/list.h>
 
-#include <linux/list.h>
+/*
+ * pseudo device rotation degree
+ */
+//extern int cur_rotation_degree;
 
 /*
  * data structure for blocked read requests
  */
-
-struct reader_struct {
-	pid_t pid;
+/*
+struct descriptor_struct {
 	int start;
 	int end;
-	struct task_struct * task;
+        struct task_struct * task;
 	struct list_head next;
 };
-
+*/
 /*
  * data structure for blocked write requests
  */
+/*
 struct writer_struct {
-	pid_t pid;
 	int start;
 	int end;
-	struct task_struct * task;
 	struct list_head next;
-};
+}
+*/
 
-struct list_head wait_reader_list;
-struct list_head wait_writer_list;
-struct list_head run_reader_list;
-struct list_head run_writer_list;
+//extern int lock;
 
-#endif
+
+
+//struct list_head descriptor_list;
+//struct list_head wait_writer_list;
+//struct list_head runnable_list;
+//struct list_head run_writer_list;
+
+#endif /* _LINUX_ROTATION_H */

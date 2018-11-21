@@ -7,60 +7,92 @@
 #define SYSCALL_ROTLOCK_READ 381
 #define SYSCALL_ROTUNLOCK_READ 383
 
-static volatile int keepRunning = 1;
+struct node {
+        int value;
+        struct node * next;
+};
+struct ilist {
+        int size;
+        struct node * head;
+        struct node * curr;
+};
+void ilist_append(struct ilist * curlist, int value){
+        struct node * newnode = (struct node *) malloc(sizeof(struct node));
+        newnode->value = value;
+        newnode->next = NULL;
+        curlist->curr->next = newnode;
+        curlist->curr = newnode;
+        curlist->size += 1;
+}
+void ilist_init(struct ilist * curlist){
+        struct node * newnode = (struct node *) malloc(sizeof(struct node));
+        curlist->head = newnode;
+        curlist->curr = curlist->head;
+        curlist->size = 0;
+}
+#define iterate_list(nodep, curlistp)    \
+        for (nodep = curlistp->head->next ; nodep != NULL; nodep = nodep->next)
 
-void intHandler(int dummy){
-	keepRunning = 0;
+int trial_division(int n){
+        int f = 2;
+        int original = n;
+        struct ilist * curlist = (struct ilist*) malloc(sizeof(struct ilist));
+        struct node * node_e;
+        ilist_init(curlist);
+        while(n > 1){
+                if(n % f == 0){
+                        n = n / f;
+                        ilist_append(curlist,f);
+                }
+                else{
+                        f += 1;
+                }
+        }
+        int j;
+        char* out = (char*) malloc(sizeof(int) * curlist->size + 400);
+        j = sprintf(out,"%d = ", original);
+        iterate_list(node_e, curlist){
+            if(node_e->next == NULL){
+                j += sprintf(out + j,"%d\n",node_e->value);
+            }else{
+                j += sprintf(out + j,"%d * ",node_e->value);
+            }
+        }
+        printf("%s",out);
+        return 1;
 }
 
-void printFactor(int num){
-	int init = num;
-	int factor = 2;
-	int cnt = 1;
-	long A[100] = {1,0,};
-	
-	while(num != 1){
-		if(num % factor == 0)
-		{
-		
-			A[cnt] = factor;
-			cnt++;
-			num /= factor;
-		}
-		else
-		{
-			factor++;
-		}	
-	}
-	
-	printf("%d = ", init);
-	for(int j=1; j<cnt-1; j++)
-		printf("%ld * ", A[j]);
-	printf("%ld\n", A[cnt-1]);
-	
-	return;
+static volatile int run = 1;
+
+void sigint_handler(int tmp){
+	run = 0;
+	syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
 }
 
 int main(int argc, char* argv[]){
-	FILE *fp;
-	int id = atoi(argv[1]);
-	int num;
-	int unlock;
 
-	signal(SIGINT, intHandler);
+	int input = atoi(argv[1]);
+
+	FILE *f;
+
+	signal(SIGINT, sigint_handler);
 	
-	while(keepRunning){
+	int value;
+	while(run){
 		if(syscall(SYSCALL_ROTLOCK_READ, 90, 90) == 0){
-			// fp = fopen("integer.txt", "r");
-			if(NULL != (fp = fopen("integer.txt", "r"))){
-			fscanf(fp, "%d", &num);
-			printf("trial-%d: ", id);
-			printFactor(num);
-			fclose(fp);
+
+			if(NULL != (f = fopen("integer.txt", "r"))){
+		    	fscanf(f, "%d", &value);
+                fclose(f);
+
+	            printf("trial-%d: ", input);
+		    	trial_division(value);
 			}
-			unlock = syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
-		}
-		sleep(1);
+
+			syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
+           
+	    }	
+          sleep(1);
 	}
 
 	return 0;

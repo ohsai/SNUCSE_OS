@@ -389,12 +389,13 @@
 		CALL(sys_process_vm_writev)
 		CALL(sys_kcmp)
 		CALL(sys_finit_module)
-/* 380 */	CALL(sys_set_rotation)
-		CALL(sys_rotlock_read)
-		CALL(sys_rotlock_write)
-		CALL(sys_rotunlock_read)
-		CALL(sys_ni_syscall)
-		CALL(sys_rotunlock_write)
+/* 380 */       CALL(sys_set_rotation)
+                CALL(sys_rotlock_read)
+                CALL(sys_rotlock_write)
+                CALL(sys_rotunlock_read)
+                CALL(sys_ni_syscall)
+/* 385 */       CALL(sys_rotunlock_write)
+
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls
 #define syscalls_counted
