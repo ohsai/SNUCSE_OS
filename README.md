@@ -217,61 +217,61 @@
 
 * `selector` : While running, it writes incrementing number from given argument on `integer.txt` in every 1 second.
                It uses `rotlock_write` and `rotunlock_write` system calls.
-               
+ 
                ```c
-                 int main(int argc, char* argv[]){
+                   int main(int argc, char* argv[]){
 
-                 ...
+                   ...
 
-                  while(run){
-                   if(syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) == 0){
+                    while(run){
+                     if(syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) == 0){
 
-                    f = fopen("integer.txt", "w");
-                    fprintf(f, "%d", input);
-                    fclose(f);
+                      f = fopen("integer.txt", "w");
+                      fprintf(f, "%d", input);
+                      fclose(f);
 
-                    printf("selector: %d\n", input);
-                    input++;
-                    syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
+                      printf("selector: %d\n", input);
+                      input++;
+                      syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90);
 
-                   }
-                   else
-                     printf("error!\n");
-                   sleep(1);
-                  }
+                     }
+                     else
+                       printf("error!\n");
+                     sleep(1);
+                    }
 
-                  return 0;
-                 }              
+                    return 0;
+                   }              
                ```
                
 * `trial` : While running, it reads the integer value from `integer.txt` and does *trial divison* on that number in every 1 second.
             It uses `rotlock_read`, `rotunlock_read`, and receives an integer argument as id.
             
             ```c
-            int main(int argc, char* argv[]){
+               int main(int argc, char* argv[]){
 
-              int input = atoi(argv[1]);
-              
-              ...
-              
-              int value;
-              while(run){
-                if(syscall(SYSCALL_ROTLOCK_READ, 90, 90) == 0){
-                  if(NULL != (f = fopen("integer.txt", "r"))){
-                    fscanf(f, "%d", &value);
-                    fclose(f);
+                 int input = atoi(argv[1]);
 
-                    printf("trial-%d: ", input);
-                    trial_division(value);
-                  }
+                 ...
 
-                  syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
-                }	
-                sleep(1);
-              }
+                 int value;
+                 while(run){
+                   if(syscall(SYSCALL_ROTLOCK_READ, 90, 90) == 0){
+                     if(NULL != (f = fopen("integer.txt", "r"))){
+                       fscanf(f, "%d", &value);
+                       fclose(f);
 
-              return 0;
-            }
+                       printf("trial-%d: ", input);
+                       trial_division(value);
+                     }
+
+                     syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
+                   }	
+                   sleep(1);
+                 }
+
+                 return 0;
+               }
             ```
 
 * How to do the test.
