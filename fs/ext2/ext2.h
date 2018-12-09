@@ -10,7 +10,7 @@
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
-#include <linux/fs.h>
+#include <linux/fs.h> // including linux/gps.h
 #include <linux/ext2_fs.h>
 #include <linux/blockgroup_lock.h>
 #include <linux/percpu_counter.h>
@@ -763,6 +763,8 @@ extern void ext2_set_inode_flags(struct inode *inode);
 extern void ext2_get_inode_flags(struct ext2_inode_info *);
 extern int ext2_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 		       u64 start, u64 len);
+extern int ext2_set_gps_location(struct inode *inode);
+extern int ext2_get_gps_location(struct inode *inode, struct gps_location *loc);
 
 /* ioctl.c */
 extern long ext2_ioctl(struct file *, unsigned int, unsigned long);

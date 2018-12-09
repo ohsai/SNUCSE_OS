@@ -6,7 +6,7 @@
 
 // initializing
 
-struct gps_location global = {
+struct gps_location GLOBAL_GPS = {
 	.lat_integer = 0,
 	.lat_fractional = 0,
 	.lng_integer = 0,
@@ -59,10 +59,11 @@ SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
 		return 0;
 
 	write_lock(&lock);
-	global.lat_integer = k_loc->lat_integer;
-	global.lat_fractional = k_loc->lat_fractional;
-	global.lng_integer = k_loc->lng_integer;
-	global.lng_fractional = k_loc->lng_fractional;
+	GLOBAL_GPS.lat_integer = k_loc->lat_integer;
+	GLOBAL_GPS.lat_fractional = k_loc->lat_fractional;
+	GLOBAL_GPS.lng_integer = k_loc->lng_integer;
+	GLOBAL_GPS.lng_fractional = k_loc->lng_fractional;
+	GLOBAL_GPS.accuracy = k_loc->accuracy;
 	write_unlock(&lock);
 
 	kfree(k_loc);

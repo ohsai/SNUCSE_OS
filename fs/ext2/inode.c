@@ -1572,6 +1572,7 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 	return error;
 }
 
+extern struct gps_location GLOBAL_GPS;// global gps form kernel/gps.c
 int ext2_set_gps_location(struct inode *inode) {
 }
 
