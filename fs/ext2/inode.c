@@ -1346,6 +1346,18 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 	inode->i_ctime.tv_sec = (signed)le32_to_cpu(raw_inode->i_ctime);
 	inode->i_mtime.tv_sec = (signed)le32_to_cpu(raw_inode->i_mtime);
 	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec = inode->i_ctime.tv_nsec = 0;
+	/* gps */
+	inode->i_lat_integer = 
+		(signed)le32_to_cpu(raw_inode->i_lat_integer);
+	inode->i_lat_fractional =
+		(signed)le32_to_cpu(raw_inode->i_lat_fractional);
+	inode->i_lng_integer =
+		(signed)le32_to_cpu(raw_inode->i_lng_integer);
+	inode->i_lng_fractional =
+		(signed)le32_to_cpu(raw_inode->i_lng_fractional);
+	inode->i_accuracy =
+		(signed)le32_to_cpu(raw_inode->i_accuracy);
+
 	ei->i_dtime = le32_to_cpu(raw_inode->i_dtime);
 	/* We now have enough fields to check if the inode was active or not.
 	 * This is needed because nfsd might try to access dead inodes
@@ -1487,6 +1499,13 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
 	raw_inode->i_frag = ei->i_frag_no;
 	raw_inode->i_fsize = ei->i_frag_size;
 	raw_inode->i_file_acl = cpu_to_le32(ei->i_file_acl);
+	/* gps */
+	raw_inode->i_lat_integer =cpu_to_le32(inode->i_lat_integer);
+	raw_inode->i_lat_fractional =cpu_to_le32(inode->i_lat_fractional);
+	raw_inode->i_lng_integer =cpu_to_le32(inode->i_lng_integer);
+	raw_inode->i_lng_fractional =cpu_to_le32(inode->i_lng_fractional);
+	raw_inode->i_accuracy =cpu_to_le32(inode->i_accuracy);
+
 	if (!S_ISREG(inode->i_mode))
 		raw_inode->i_dir_acl = cpu_to_le32(ei->i_dir_acl);
 	else {
@@ -1572,13 +1591,26 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 	return error;
 }
 
-extern struct gps_location GLOBAL_GPS;// global gps form kernel/gps.c
+extern struct gps_location GLOBAL_GPS;// global gps from /kernel/gps.c
 int ext2_set_gps_location(struct inode *inode) {
+	inode->i_lat_integer = GLOBAL_GPS.lat_integer;
+	inode->i_lat_fractional = GLOBAL_GPS.lat_fractional;
+	inode->i_lng_integer = GLOBAL_GPS.lng_integer;
+	inode->i_lng_fractional = GLOBAL_GPS.lng_integer;
+	inode->i_accuracy = GLOBAL_GPS.accuracy;
+
+	return 0;
 }
 
 int
 ext2_get_gps_location(struct inode *inode, struct gps_location *loc) {
+	loc->lat_integer = inode->i_lat_integer;
+	loc->lat_fractional = inode->i_lat_fractional;
+	loc->lng_integer = inode->i_lng_integer;
+	loc->lng_fractional = inode->i_lng_fractional;
+	loc->accuracy = inode->i_accuracy;
 
+	return 0;
 }
 
 

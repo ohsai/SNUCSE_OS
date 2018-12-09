@@ -347,11 +347,11 @@ struct ext2_inode {
 		} masix2;
 	} osd2;				/* OS dependent 2 */
 	/* gps */
-	__u32	i_lat_integer;
-	__u32	i_lat_fractional;
-	__u32	i_lng_integer;
-	__u32	i_lng_fractional;
-	__u32	i_accuracy;
+	__le32	i_lat_integer;
+	__le32	i_lat_fractional;
+	__le32	i_lng_integer;
+	__le32	i_lng_fractional;
+	__le32	i_accuracy;
 };
 
 #define i_size_high	i_dir_acl
