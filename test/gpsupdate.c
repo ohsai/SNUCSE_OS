@@ -32,7 +32,7 @@ void gps_update(struct gps_location * loc, int * lat, int * lng) {
 
 	loc->lat_integer = (*lat) - 90;
 	loc->lat_fractional = lat_fric;
-	loc->lng_integer = (*lng) - 90;
+	loc->lng_integer = (*lng) - 180;
 	loc->lng_fractional = lng_fric;
 	loc->accuracy = 0;
 

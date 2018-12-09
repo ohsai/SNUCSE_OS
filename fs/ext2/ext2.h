@@ -695,6 +695,13 @@ struct ext2_inode_info {
 	struct mutex truncate_mutex;
 	struct inode	vfs_inode;
 	struct list_head i_orphan;	/* unlinked but open inodes */
+
+	/* gps */
+	__u32	i_lat_integer;
+	__u32	i_lat_fractional;
+	__u32	i_lng_integer;
+	__u32	i_lng_fractional;
+	__u32	i_accuracy;
 };
 
 /*
