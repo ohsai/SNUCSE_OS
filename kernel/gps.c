@@ -45,8 +45,6 @@ static int valid_check(struct gps_location * loc) {
 
 SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
 	struct gps_location * k_loc;
-	int latitude;
-	int longitude;
 
 	if (loc == NULL)
 		return 0;
