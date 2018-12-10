@@ -3,7 +3,7 @@
 #include <linux/unistd.h>
 #include <linux/gps.h>
 #include <linux/slab.h>
-
+#include <linux/errno.h>
 // initializing
 
 struct gps_location GLOBAL_GPS = {
@@ -14,29 +14,30 @@ struct gps_location GLOBAL_GPS = {
 	.accuracy = 0,
 };
 
-static DEFINE_RWLOCK(lock);
+DEFINE_RWLOCK(lock); 
+//we cannot use this in inode operation if we declare it as static
 
 static int valid_check(struct gps_location * loc) {
 	int lat_integer = loc->lat_integer;
 	int lat_fractional = loc->lat_fractional;
 	int lng_integer = loc->lng_integer;
 	int lng_fractional = loc->lng_fractional;
-
-	if (lat_fractional < 0 || lat_fractional > 999999)
+#define is_not_fractional( X )  (X < 0 || X > 999999)
+	if (is_not_fractional(lat_fractional)){
 		return 0;
-	if (lng_fractional < 0 || lng_fractional > 999999)
+        }
+        if (is_not_fractional(lng_fractional)){
 		return 0;
-
-	if (lat_integer < -90 || lat_integer > 90)
+        }
+#undef is_not_fractional
+#define is_not_angle(X_INT, X_FRAC, MAX_ANGLE) ((X_INT < - MAX_ANGLE) || (X_INT > MAX_ANGLE) || (X_INT == MAX_ANGLE && X_FRAC > 0))
+        if(is_not_angle(lat_integer, lat_fractional, 90)){
 		return 0;
-	if (lng_integer < -180 || lng_integer > 180)
+        }
+        if(is_not_angle(lng_integer, lng_fractional, 180)){
 		return 0;
-
-	if (lat_integer == 90 && lat_fractional > 0)
-		return 0;
-	if (lng_integer == 180 && lng_fractional > 0)
-		return 0;
-
+        }
+#undef is_not_angle
 	if (loc->accuracy < 0)
 		return 0;
 
@@ -46,16 +47,27 @@ static int valid_check(struct gps_location * loc) {
 SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
 	struct gps_location * k_loc;
 
+        int err;
+        //loc arg check
 	if (loc == NULL)
-		return 0;
-
-	k_loc = kmalloc(sizeof(struct gps_location), GFP_KERNEL);
-	if(copy_from_user(k_loc, loc, sizeof(struct gps_location)))
-		return 0;
-
-	if(!valid_check(k_loc))
-		return 0;
-
+		return -EINVAL;
+        if((err = access_ok(VERIFY_READ,loc,sizeof(struct gps_location))) ==0)
+                return -EFAULT;
+        //copy from user
+	k_loc = (struct gps_location *)kmalloc(sizeof(struct gps_location), GFP_KERNEL);
+        if (k_loc == NULL)
+                return -ENOMEM;
+	if(copy_from_user(k_loc, loc, sizeof(struct gps_location))){ //nonzero if something is not copied
+                kfree(k_loc);
+		return -EFAULT;
+        }
+        //input validity check
+	if(!valid_check(k_loc)){
+                kfree(k_loc);
+		return -EINVAL;
+        }
+        
+        //set global gps
 	write_lock(&lock);
 	GLOBAL_GPS.lat_integer = k_loc->lat_integer;
 	GLOBAL_GPS.lat_fractional = k_loc->lat_fractional;
@@ -65,15 +77,78 @@ SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
 	write_unlock(&lock);
 
 	kfree(k_loc);
-	return 1;
+	return 0;
 }
 
+#define MAX_PATHLENGTH 100000L
 SYSCALL_DEFINE2(get_gps_location, const char __user*, pathname, 
-				struct gps_locatiob __user*, location) {
+				struct gps_location __user*, loc) {
+	struct gps_location * k_loc;
+
+        int err;
+        long path_strlen;
+        char * k_pathname;
+        struct inode * cur_inode;
+        struct path cur_path;
+
+        //loc arg check
+	if (loc == NULL){
+		return -EINVAL;
+        }
+        if((err = access_ok(VERIFY_WRITE,loc,sizeof(struct gps_location))) ==0){
+                return -EFAULT;
+        }
+        //path arg check
+        if (path_name == NULL){
+                return -EINVAL;
+        }
+        if((path_strlen = strnlen_user(pathname,MAX_PATHLENGTH)) == 0){
+                return -EINVAL;
+        }
+        if((err = access_ok(VERIFY_READ,pathname,path_strlen)) == 0){
+                return -EFAULT;
+        }
+
+        //copy path name
+        k_pathname = (char*) kmalloc(sizeof(char) * path_strlen, GFP_KERNEL);
+        if(k_pathname == NULL){
+                return -ENOMEM;
+        }
+        if(strncpy_from_user(k_pathname,pathname,MAX_PATHLENGTH) < 0){
+                kfree(k_pathname);
+                return -EFAULT;
+        }
+        if(kern_path(k_pathname,LOOKUP_FOLLOW,&cur_path)){ 
+                // LOOKUP_FOLLOW also considers symlinks.
+                //stackoverflow "Retrieving inode struct given the path to a file"
+                kfree(k_pathname);
+                return -EINVAL;
+        }
+        kfree(k_pathname);
+        
+        //find inode for it
+        cur_inode = cur_path.dentry->d_inode;
+        //setup space for copy_to_user
+	k_loc = (struct gps_location *)kmalloc(sizeof(struct gps_location), GFP_KERNEL);
+        if (k_loc == NULL){
+                return -ENOMEM;
+        }
+        //find gps info from it
+        if(inode->i_op->get_gps_location){
+                inode->i_op->get_gps_location(inode,k_loc);
+        }                                
+        else{
+                return -ENODEV;
+        }
+        //copy_to_user
+	if(copy_to_user(k_loc, loc, sizeof(struct gps_location))){ //nonzero if something is not copied
+                kfree(k_loc);
+		return -EFAULT;
+        }
+
+	kfree(k_loc);
+        return 0;
 }
-
-
-
 
 
 
