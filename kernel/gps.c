@@ -14,8 +14,11 @@ struct gps_location GLOBAL_GPS = {
 	.accuracy = 0,
 };
 
-DEFINE_RWLOCK(lock); 
+DEFINE_RWLOCK(gps_lock); 
 //we cannot use this in inode operation if we declare it as static
+int nearby_created_area(struct inode * inode_in){
+        return 0; //if nearby
+}
 
 static int valid_check(struct gps_location * loc) {
 	int lat_integer = loc->lat_integer;
@@ -68,13 +71,13 @@ SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
         }
         
         //set global gps
-	write_lock(&lock);
+	write_lock(&gps_lock);//should we use write_lock_rqsave?
 	GLOBAL_GPS.lat_integer = k_loc->lat_integer;
 	GLOBAL_GPS.lat_fractional = k_loc->lat_fractional;
 	GLOBAL_GPS.lng_integer = k_loc->lng_integer;
 	GLOBAL_GPS.lng_fractional = k_loc->lng_fractional;
 	GLOBAL_GPS.accuracy = k_loc->accuracy;
-	write_unlock(&lock);
+	write_unlock(&gps_lock);
 
 	kfree(k_loc);
 	return 0;
@@ -135,9 +138,13 @@ SYSCALL_DEFINE2(get_gps_location, const char __user*, pathname,
         }
         //find gps info from it
         if(inode->i_op->get_gps_location){
-                inode->i_op->get_gps_location(inode,k_loc);
+                if(inode->i_op->get_gps_location(inode,k_loc) != 0){
+                        kfree(k_loc);
+                        return -EINVAL; // bad inode 이거 머라 에러처리할까?
+                } 
         }                                
         else{
+                kfree(k_loc);
                 return -ENODEV;
         }
         //copy_to_user

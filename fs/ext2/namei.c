@@ -115,6 +115,10 @@ static int ext2_create (struct inode * dir, struct dentry * dentry, umode_t mode
 		inode->i_mapping->a_ops = &ext2_aops;
 		inode->i_fop = &ext2_file_operations;
 	}
+        // location info on file creation
+        if(inode->i_op->set_gps_location){
+                inode->iop->set_gps_location(inode);
+        } 
 	mark_inode_dirty(inode);
 	return ext2_add_nondir(dentry, inode);
 }

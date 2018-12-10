@@ -8,5 +8,6 @@ struct gps_location {
 	int lng_fractional;
 	int accuracy;
 };
+int nearby_created_area(struct inode * inode_in);
 
 #endif

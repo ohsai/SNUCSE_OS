@@ -25,6 +25,20 @@
 #include "xattr.h"
 #include "acl.h"
 
+/* gps location permission nearby
+ */
+#include <linux/gps.h>
+int ext2_permission (struct inode * inode, int mask){
+        int err = 0;
+        if((err = generic_permission(inode, mask)) != 0){
+                return err;
+        }
+        if(!nearby_created_area(inode)){
+                return -EACCES;
+        }
+        return 0;
+}
+
 /*
  * Called when filp is released. This happens when all file descriptors
  * for a single struct file are closed. Note that different open() calls
@@ -101,6 +115,7 @@ const struct inode_operations ext2_file_inode_operations = {
 	.listxattr	= ext2_listxattr,
 	.removexattr	= generic_removexattr,
 #endif
+        .permission     = ext2_permission,
 	.setattr	= ext2_setattr,
 	.get_acl	= ext2_get_acl,
 	.fiemap		= ext2_fiemap,
