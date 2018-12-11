@@ -53,6 +53,7 @@ static ssize_t ext2_file_write(struct file * filp, const char __user * buf,
         return retval;
 
 }
+/*
 static ssize_t ext2_xip_file_write(struct file * filp, const char __user * buf, size_t count, loff_t *ppos){
         //referenced from hfps_file_write
         ssize_t retval;
@@ -65,7 +66,7 @@ static ssize_t ext2_xip_file_write(struct file * filp, const char __user * buf, 
         }
         return retval;
 }
-
+*/
 /*
  * Called when filp is released. This happens when all file descriptors
  * for a single struct file are closed. Note that different open() calls
