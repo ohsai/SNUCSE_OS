@@ -8,7 +8,4 @@ struct gps_location {
 	int lng_fractional;
 	int accuracy;
 };
-int nearby_created_area(struct inode * inode_in);
-extern struct gps_location GLOBAL_GPS;// global gps from /kernel/gps.c
-extern rwlock_t gps_lock;
 #endif

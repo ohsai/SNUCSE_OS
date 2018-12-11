@@ -4,6 +4,7 @@
 #include <linux/gps.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
+#include <linux/namei.h>
 // initializing
 
 struct gps_location GLOBAL_GPS = {
@@ -96,32 +97,40 @@ SYSCALL_DEFINE2(get_gps_location, const char __user*, pathname,
 
         //loc arg check
 	if (loc == NULL){
+                printk(KERN_DEBUG"1\n");
 		return -EINVAL;
         }
         if((err = access_ok(VERIFY_WRITE,loc,sizeof(struct gps_location))) ==0){
+                printk(KERN_DEBUG"2\n");
                 return -EFAULT;
         }
         //path arg check
-        if (path_name == NULL){
+        if (pathname == NULL){
+                printk(KERN_DEBUG"3\n");
                 return -EINVAL;
         }
         if((path_strlen = strnlen_user(pathname,MAX_PATHLENGTH)) == 0){
+                printk(KERN_DEBUG"4\n");
                 return -EINVAL;
         }
         if((err = access_ok(VERIFY_READ,pathname,path_strlen)) == 0){
+                printk(KERN_DEBUG"5\n");
                 return -EFAULT;
         }
 
         //copy path name
         k_pathname = (char*) kmalloc(sizeof(char) * path_strlen, GFP_KERNEL);
         if(k_pathname == NULL){
+                printk(KERN_DEBUG"6\n");
                 return -ENOMEM;
         }
         if(strncpy_from_user(k_pathname,pathname,MAX_PATHLENGTH) < 0){
+                printk(KERN_DEBUG"7\n");
                 kfree(k_pathname);
                 return -EFAULT;
         }
         if(kern_path(k_pathname,LOOKUP_FOLLOW,&cur_path)){ 
+                printk(KERN_DEBUG"8\n");
                 // LOOKUP_FOLLOW also considers symlinks.
                 //stackoverflow "Retrieving inode struct given the path to a file"
                 kfree(k_pathname);
@@ -134,21 +143,26 @@ SYSCALL_DEFINE2(get_gps_location, const char __user*, pathname,
         //setup space for copy_to_user
 	k_loc = (struct gps_location *)kmalloc(sizeof(struct gps_location), GFP_KERNEL);
         if (k_loc == NULL){
+                printk(KERN_DEBUG"9\n");
                 return -ENOMEM;
         }
         //find gps info from it
-        if(inode->i_op->get_gps_location){
-                if(inode->i_op->get_gps_location(inode,k_loc) != 0){
+        if(cur_inode->i_op->get_gps_location){
+                if(cur_inode->i_op->get_gps_location(cur_inode,k_loc) != 0){
+                printk(KERN_DEBUG"10\n");
+                        //bad argument
                         kfree(k_loc);
-                        return -EINVAL; // bad inode 이거 머라 에러처리할까?
+                        return -EINVAL; 
                 } 
         }                                
         else{
+                printk(KERN_DEBUG"11\n");
                 kfree(k_loc);
                 return -ENODEV;
         }
         //copy_to_user
-	if(copy_to_user(k_loc, loc, sizeof(struct gps_location))){ //nonzero if something is not copied
+	if(copy_to_user(loc, k_loc, sizeof(struct gps_location))){ //nonzero if something is not copied
+                printk(KERN_DEBUG"12\n");
                 kfree(k_loc);
 		return -EFAULT;
         }

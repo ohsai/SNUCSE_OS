@@ -1376,18 +1376,15 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 	ei->i_dir_start_lookup = 0;
 
 	/* gps */
-        if(inode->i_op->set_gps_location){
+        /*if(inode->i_op->set_gps_location){
                 inode->iop->set_gps_location(inode);
         } 
-        //ext2_iget 이 함수 read할때만 call되는거 아냐? modify 는 write만인데 read일떄도 gps 정보 바뀌면 안되잖아
-        //일단 남겨는 놓는데 아마 지워질거같음 이건
-        /*
+        */
 	ei->i_lat_integer = le32_to_cpu(raw_inode->i_lat_integer);
 	ei->i_lat_fractional = le32_to_cpu(raw_inode->i_lat_fractional);
 	ei->i_lng_integer = le32_to_cpu(raw_inode->i_lng_integer);
 	ei->i_lng_fractional = le32_to_cpu(raw_inode->i_lng_fractional);
 	ei->i_accuracy = le32_to_cpu(raw_inode->i_accuracy);
-        */
         
 	/*
 	 * NOTE! The in-memory inode i_data array is in little-endian order
@@ -1504,16 +1501,17 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
 	/* gps */
         //location info on file write / modification
         //fs/read_write.c or here?
+        /*
         if(inode->i_op->set_gps_location){
                 inode->iop->set_gps_location(inode);
         } 
-        /*
-	raw_inode->i_lat_integer =cpu_to_le32(inode->i_lat_integer);
-	raw_inode->i_lat_fractional =cpu_to_le32(inode->i_lat_fractional);
-	raw_inode->i_lng_integer =cpu_to_le32(inode->i_lng_integer);
-	raw_inode->i_lng_fractional =cpu_to_le32(inode->i_lng_fractional);
-	raw_inode->i_accuracy =cpu_to_le32(inode->i_accuracy);
         */
+	raw_inode->i_lat_integer =cpu_to_le32(ei->i_lat_integer);
+	raw_inode->i_lat_fractional =cpu_to_le32(ei->i_lat_fractional);
+	raw_inode->i_lng_integer =cpu_to_le32(ei->i_lng_integer);
+	raw_inode->i_lng_fractional =cpu_to_le32(ei->i_lng_fractional);
+	raw_inode->i_accuracy =cpu_to_le32(ei->i_accuracy);
+        
 	if (!S_ISREG(inode->i_mode))
 		raw_inode->i_dir_acl = cpu_to_le32(ei->i_dir_acl);
 	else {
@@ -1599,27 +1597,27 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 	return error;
 }
 
-extern struct gps_location GLOBAL_GPS;// global gps from /kernel/gps.c
 
 int ext2_set_gps_location(struct inode *inode) {
-	//struct ext2_inode_info * ei = EXT2_I(inode);
+	struct ext2_inode_info * ei = EXT2_I(inode);
         //Get struct ext2_inode from struct inode
         //following 4 line referenced from __ext2_write_inode
-        struct super_block * sb = inode->i_sb;
+        /*struct super_block * sb = inode->i_sb;
         ino_t ino = inode->i_ino;
         struct buffer_head * bh;
         struct ext2_inode * raw_inode = ext2_get_inode(sb, ino, &bh); 
         if(IS_ERR(raw_inode)){
                 return -EINVAL;
         }
+        */
         //change location status of corresponding struct ext2_inodea
         //be careful of data type int, __u32, __le32
         read_lock(&gps_lock); //should we use read_lock_irqsave ?
-	raw_inode->i_lat_integer = cpu_to_le32((__u32)(GLOBAL_GPS.lat_integer));
-	raw_inode->i_lat_fractional = cpu_to_le32((__u32)(GLOBAL_GPS.lat_fractional));
-	raw_inode->i_lng_integer = cpu_to_le32((__u32)(GLOBAL_GPS.lng_integer));
-	raw_inode->i_lng_fractional = cpu_to_le32((__u32)(GLOBAL_GPS.lng_integer));
-	raw_inode->i_accuracy = cpu_to_le32((__u32)(GLOBAL_GPS.accuracy));
+	ei->i_lat_integer = (__u32)(GLOBAL_GPS.lat_integer);
+	ei->i_lat_fractional = (__u32)(GLOBAL_GPS.lat_fractional);
+	ei->i_lng_integer = (__u32)(GLOBAL_GPS.lng_integer);
+	ei->i_lng_fractional = (__u32)(GLOBAL_GPS.lng_fractional);
+	ei->i_accuracy = (__u32)(GLOBAL_GPS.accuracy);
         read_unlock(&gps_lock);
 	return 0;
 }
@@ -1627,7 +1625,8 @@ int ext2_set_gps_location(struct inode *inode) {
 int
 ext2_get_gps_location(struct inode *inode, struct gps_location *loc) {
         //get struct ext2_inode from struct inode
-	//struct ext2_inode_info * ei = EXT2_I(inode);
+	struct ext2_inode_info * ei = EXT2_I(inode);
+        /*
         struct super_block * sb = inode->i_sb;
         ino_t ino = inode->i_ino;
         struct buffer_head * bh;
@@ -1635,13 +1634,18 @@ ext2_get_gps_location(struct inode *inode, struct gps_location *loc) {
         if(IS_ERR(raw_inode)){
                 return -EINVAL;
         }
+        */
+        if(loc == NULL){
+                return -EINVAL;
+        }
         //should we consider file i/o concurrency?
         //copy value from inode location
-	loc->lat_integer = (int)le32_to_cpu(raw_inode->i_lat_integer);
-	loc->lat_fractional = (int)le32_to_cpu(raw_inode->i_lat_fractional);
-	loc->lng_integer = (int)le32_to_cpu(raw_inode->i_lng_integer);
-	loc->lng_fractional = (int)le32_to_cpu(raw_inode->i_lng_fractional);
-	loc->accuracy = (int)le32_to_cpu(raw_inode->i_accuracy);
+        
+	loc->lat_integer = (int)(ei->i_lat_integer);
+	loc->lat_fractional = (int)(ei->i_lat_fractional);
+	loc->lng_integer = (int)(ei->i_lng_integer);
+	loc->lng_fractional = (int)(ei->i_lng_fractional);
+	loc->accuracy = (int)(ei->i_accuracy);
 
 	return 0;
 }
