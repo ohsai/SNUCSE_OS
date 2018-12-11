@@ -45,6 +45,29 @@ int nearby_created_area(struct inode * cur_inode){
 }
 #define FRAC_MAX 1000000L
 #define FRAC_MIN 0
+typedef struct pseudo_float_vector3{
+        gps_float value[3];
+} gfvec3;
+gfvec3 gfvec3_init(gps_float x, gps_float y, gps_float z);
+gps_float gfvec3_dotprod(gfvec3 a, gfvec3 b);
+
+gfvec3 gfvec3_init(gps_float x, gps_float y, gps_float z){
+        gfvec3 out;
+        out.value[0] = x;
+        out.value[1] = y;
+        out.value[2] = z;
+        return out;
+}
+gps_float gfvec3_dotprod(gfvec3 a, gfvec3 b){
+        gps_float out = gps_float_init(0,0);
+        out = gps_float_add(out,gps_float_mul(a.value[0],b.value[0]));
+        out = gps_float_add(out,gps_float_mul(a.value[1],b.value[1]));
+        out = gps_float_add(out,gps_float_mul(a.value[2],b.value[2]));
+        return out;
+}
+
+
+
 typedef struct pseudo_float {
         int int_part;
         int frac_part;
