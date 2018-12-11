@@ -43,7 +43,7 @@ int nearby_created_area(struct inode * cur_inode){
 
         return 0; //if nearby
 }
-#define FRAC_MAX 1000000
+#define FRAC_MAX 1000000L
 #define FRAC_MIN 0
 typedef struct pseudo_float {
         int int_part;
@@ -68,7 +68,7 @@ gps_float gps_float_add(gps_float a, gps_float b){
        out.int_part = a.int_part + b.int_part;
        out.int_part += (a.frac_part + b.frac_part) / FRAC_MAX;
        out.frac_part = (a.frac_part + b.frac_part) % FRAC_MAX;
-       printk(KERN_DEBUG"gpsfloat add a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
+       //printk(KERN_DEBUG"gpsfloat add a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
        return out;
 }
 gps_float gps_float_sub(gps_float a, gps_float b){
@@ -77,29 +77,33 @@ gps_float gps_float_sub(gps_float a, gps_float b){
        out.int_part = a.int_part - b.int_part;
        temp = (a.frac_part - b.frac_part);
        if(temp < FRAC_MIN){
-               out.int_part -= (temp / FRAC_MAX + 1);
-               temp = FRAC_MAX + (temp % FRAC_MAX);
+               out.int_part -= 1;
+               temp = FRAC_MAX + temp;
        }
        out.frac_part = temp;
-       printk(KERN_DEBUG"gpsfloat sub a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
+       //printk(KERN_DEBUG"gpsfloat sub a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
        return out;
 }
 gps_float gps_float_mul(gps_float a, gps_float b){
         gps_float out;
         //int part
-        int a1b1 = a.int_part * b.int_part;
+        s64 a1b1 = ((s64)a.int_part) * ((s64)b.int_part);
         //frac part
-        int a1b2 = a.int_part * b.frac_part;
-        int a2b1 = a.frac_part * b.int_part;
-        int a2b2 = a.frac_part * b.frac_part;
-        int temp = a1b2 + a2b1 + (a2b2 / FRAC_MAX);
-        out.int_part = a1b1;
-        if(temp < FRAC_MIN){
-                out.int_part -= (temp /FRAC_MAX + 1);
-                temp = FRAC_MAX + (temp % FRAC_MAX);
+        s32 remainder;
+        s64 a1b2 = (s64)a.int_part * (s64)b.frac_part;
+        s64 a2b1 = (s64)a.frac_part * (s64)b.int_part;
+        s64 a2b2 = (s64)a.frac_part * (s64)b.frac_part;
+        s64 temp = a1b2 + a2b1 + (div64_s64(a2b2, FRAC_MAX));
+        out.int_part = (s32)a1b1;
+        out.int_part += (s32)div_s64_rem(temp, (s32)FRAC_MAX,&remainder);
+
+        //printk(KERN_DEBUG"gpsfloat mul a1b1 %lld a2b1 %lld a1b2 %lld a2b2 %lld temp %lld remainder %d out.int_part %d",a1b1, a2b1, a1b2, a2b2, temp,remainder, out.int_part);
+        if(remainder < FRAC_MIN){
+                out.int_part -= 1;
+                remainder = (s32)FRAC_MAX + remainder;
         }
-        out.frac_part = temp;
-       printk(KERN_DEBUG"gpsfloat mul a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
+        out.frac_part = remainder;
+       //printk(KERN_DEBUG"gpsfloat mul ( (%d + 0.%06d) * (%d + 0.%06d) ) - (%d + 0.%06d) == 0",a.int_part, a.frac_part, b.int_part,b.frac_part, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_div(gps_float a, gps_float b){
@@ -111,21 +115,26 @@ gps_float gps_float_div(gps_float a, gps_float b){
         long long tempb = ((long long) b.int_part) * FRAC_MAX + b.frac_part;
         //use do_div for long long division -> complicated
         */
-        int int_temp;
-        int frac_temp;
-        int tempa = (a.int_part) * FRAC_MAX + a.frac_part;
-        int tempb = (b.int_part) * FRAC_MAX + b.frac_part;
-        int_temp = tempa / tempb;
-        tempa = (tempa % tempb) * FRAC_MAX;
-        frac_temp = tempa / tempb;
+        s64 int_temp;
+        s64 frac_temp;
+        s64 carry_temp;
+        s64 remainder_temp;
+        s64 tempa = ((s64)a.int_part) * FRAC_MAX + (s64)a.frac_part;
+        s64 tempb = ((s64)b.int_part) * FRAC_MAX + (s64)b.frac_part;
+        int_temp = div64_s64(tempa,tempb);
+        remainder_temp = (tempa - (int_temp * tempb));
+        frac_temp = div64_s64((remainder_temp * FRAC_MAX),tempb);
+        carry_temp = div64_s64(frac_temp,FRAC_MAX);
+        frac_temp = frac_temp - carry_temp * FRAC_MAX;
+        //printk(KERN_DEBUG"gpsfloat div tempa %lld tempb %lld int_temp %lld remainder_temp %lld carry_temp %lld frac_temp %lld",tempa,tempb,int_temp,remainder_temp, carry_temp,frac_temp);
         if(frac_temp < FRAC_MIN){
-                int_temp -= (frac_temp / FRAC_MAX + 1);
-                frac_temp = FRAC_MAX + (frac_temp % FRAC_MAX);
+                int_temp -= 1;
+                frac_temp = FRAC_MAX + frac_temp;
         }
-        out = gps_float_init(int_temp, frac_temp);
+        out = gps_float_init((s32)int_temp, (s32)frac_temp);
         //out.int_part = (int)int_temp;
         //out.frac_part = (int)frac_temp;
-       printk(KERN_DEBUG"gpsfloat div a : %d.+%d, b : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, b.int_part, b.frac_part, out.int_part, out.frac_part);
+       //printk(KERN_DEBUG"gpsfloat div ( (%d + 0.%06d) * (%d + 0.%06d) ) - (%d + 0.%06d) == 0",a.int_part, a.frac_part, b.int_part,b.frac_part, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_factorial(int n){
@@ -144,7 +153,7 @@ gps_float gps_float_factorial(int n){
                 temp = gps_float_init(i,0);
                 out = gps_float_mul(out,temp);
         }
-        printk(KERN_DEBUG"gpsfloat factorial n : %d, out : %d.+%d",n, out.int_part, out.frac_part);
+        //printk(KERN_DEBUG"gpsfloat factorial n : %d, out : %d.+%d",n, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_power(gps_float a, int n){
@@ -161,13 +170,13 @@ gps_float gps_float_power(gps_float a, int n){
         for(i = 1; i <= n; i++){
                 out = gps_float_mul(out,a);
         }
-        printk(KERN_DEBUG"gpsfloat power a : %d.+%d,n : %d. out : %d.+%d",a.int_part, a.frac_part,n, out.int_part, out.frac_part);
+        //printk(KERN_DEBUG"gpsfloat power a : %d.+%d,n : %d. out : %d.+%d",a.int_part, a.frac_part,n, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_sin(gps_float a){
         gps_float out;
         int i;
-        int max_depth = 9;
+        int max_depth =11; //positive odd
         out = gps_float_init(0,0);
         for(i = 1; i <= max_depth; i+=2){
                 if((i-1)%4 == 0){
@@ -181,13 +190,13 @@ gps_float gps_float_sin(gps_float a){
                                                 gps_float_factorial(i)));
                 }
         }
-        printk(KERN_DEBUG"gpsfloat sin a : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, out.int_part, out.frac_part);
+        printk(KERN_DEBUG"gpsfloat calc sin(%d+0.%06d)-(%d+0.%06d) == 0 ",a.int_part, a.frac_part, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_cos(gps_float a){
         gps_float out;
         int i;
-        int max_depth = 8;
+        int max_depth = 10;
         out = gps_float_init(0,0);
         for(i = 0; i <= max_depth; i+=2){
                 if((i)%4 == 0){
@@ -201,7 +210,8 @@ gps_float gps_float_cos(gps_float a){
                                                 gps_float_factorial(i)));
                 }
         }
-        printk(KERN_DEBUG"gpsfloat cos a : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, out.int_part, out.frac_part);
+        printk(KERN_DEBUG"gpsfloat calc cos(%d+0.%06d)-(%d+0.%06d) == 0 ",a.int_part, a.frac_part, out.int_part, out.frac_part);
+        //printk(KERN_DEBUG"gpsfloat cos a : %d.+%d, out : %d.+%d",a.int_part, a.frac_part, out.int_part, out.frac_part);
         return out;
 }
 
@@ -268,11 +278,15 @@ SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
 
         for(test = 1; test < 5; test++){
                 gps_float_sin(gps_float_init(test, (FRAC_MAX / 10)));
+                gps_float_sin(gps_float_init(test, (5 * FRAC_MAX / 10)));
                 gps_float_cos(gps_float_init(test, (FRAC_MAX / 10)));
+                gps_float_cos(gps_float_init(test, (5 * FRAC_MAX / 10)));
         }
         for(test = 0; test > -5; test--){
                 gps_float_sin(gps_float_init(test, (FRAC_MAX / 10)));
+                gps_float_sin(gps_float_init(test, (5 * FRAC_MAX / 10)));
                 gps_float_cos(gps_float_init(test, (FRAC_MAX / 10)));
+                gps_float_cos(gps_float_init(test, (5 * FRAC_MAX / 10)));
         }
 
 	kfree(k_loc);
