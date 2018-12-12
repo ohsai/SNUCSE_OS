@@ -130,15 +130,13 @@ kernel/gps.c :
 
   - Define struct gps_float which resembles float type, but has signed int part and unsigned and bounded (0 ~ 999999) fractional part
 
-  - Define initialization and arithmetics addition, subtraction, multiplication, division for gps_float
+  - Define initialization and arithmetics addition, subtraction, multiplication, division for gps_float /logic for operation explanation needed 
 
-%% logic for operation explanation needed 
-
-    -precision error less than 10^-5
+    - precision error less than 10^-5
 
   - Define advanced functions degree2rad, rad2degree, sin(radian), cos(radian), arccos(radian), PI for gps_float
 
-     - Taylor expansion for transcendental function approximation, since only polynomial expression was allowed.
+    - Taylor expansion for transcendental function approximation, since only polynomial expression was allowed.
 
     - %%taylor expansion formula for sin cos arccos and formula for deg <-> rad 
 
