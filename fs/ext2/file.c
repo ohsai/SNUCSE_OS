@@ -34,7 +34,8 @@ int ext2_permission (struct inode * inode, int mask){
         if((err = generic_permission(inode, mask)) != 0){
                 return err;
         }
-        if(nearby_created_area(inode)){ //1 if not nearby
+        if(nearby_created_area(inode)){ 
+                /* 0 if nearby */
                 return -EACCES;
         }
         return 0;

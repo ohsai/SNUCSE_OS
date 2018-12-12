@@ -3,10 +3,10 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include "gps.h"
 #define SYSCALL_SET_GPS_LOCATION 380
 
-struct gps_location {
+/*struct gps_location {
 	int lat_integer;
 	int lat_fractional;
 	int lng_integer;
@@ -14,6 +14,7 @@ struct gps_location {
 	int accuracy;
 };
 
+*/
 void gps_input(struct gps_location * loc, int lat_i, int lat_f,
 				int lng_i, int lng_f, int acc) {
 	loc->lat_integer = lat_i;
@@ -34,6 +35,7 @@ int main(int argc, char* argv[]) {
         int err = 0;
 	struct gps_location device;
         if(argc != 6){
+                printf("Invalid number of Arguments\n");
                 return -EINVAL;
         }
         lat_integer = atoi(argv[1]);
@@ -43,7 +45,8 @@ int main(int argc, char* argv[]) {
         accuracy = atoi(argv[5]);
         gps_input(&device, lat_integer, lat_fractional, 
 			   lng_integer, lng_fractional, accuracy);
-        err = syscall(SYSCALL_SET_GPS_LOCATION, device); //Golang-style programming
+        syscall(SYSCALL_SET_GPS_LOCATION, &device); //Golang-style programming
+        err = -errno;
         if(err == -EINVAL){
                 printf("Invalid Argument \n");
         }
@@ -52,6 +55,9 @@ int main(int argc, char* argv[]) {
         }
         else if(err == -ENOMEM){
                 printf("Not Enough Kernel Memory \n");
+        }
+        else if(err == 0){
+                printf("New GPS location set \n");
         }
 	return err;
 }

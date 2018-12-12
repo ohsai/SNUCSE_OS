@@ -3,7 +3,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include <string.h>
+#include "gps.h"
 #define SYSCALL_GET_GPS_LOCATION 381
 
 #define MAX_STRING_LENGTH 400
@@ -28,9 +29,11 @@ int main(int argc, char* argv[]) {
                 printf("Not Enough User Memory \n");
                 return -ENOMEM;
         }
-        strncpy(pathname,argv[0],len+1);
+        strncpy(pathname,argv[1],len+1);
+        //printf("Input path : %s \n",pathname);
         
-        err = syscall(SYSCALL_GET_GPS_LOCATION,pathname, device); //Golang-style programming
+        syscall(SYSCALL_GET_GPS_LOCATION,pathname, &device); //Golang-style programming
+        err = -errno;
         if(err == -EINVAL){
                 printf("Invalid Argument \n");
         }
@@ -43,12 +46,15 @@ int main(int argc, char* argv[]) {
         else if(err == -ENODEV){
                 printf("GPS Ability Not Developed \n");
         }
-        else{
-                latitude = (float)device.lat_integer + ((float)device.lat_fractional / 100000.0);
-                longitude = (float)device.lng_integer + ((float)device.lng_fractional / 100000.0);
+        else if(err == -EACCES){
+                printf("File Permission Denied \n");
+        }
+        else if(err == 0){
+                latitude = (float)device.lat_integer + ((float)device.lat_fractional / 1000000.0);
+                longitude = (float)device.lng_integer + ((float)device.lng_fractional / 1000000.0);
                 //print gps location
-                printf("latitude : %0.4f , longitude : %0.4f\n",latitude, longitude);
-                printf("https://www.google.com/maps/search/?api=1&query=%0.4f,%0.4f\n",latitude,longitude);
+                printf("latitude : %0.6f , longitude : %0.6f, accuracy : %dm\n",latitude, longitude, device.accuracy);
+                printf("https://www.google.com/maps/search/?api=1&query=%0.6f,%0.6f\n",latitude,longitude);
         }
 	return err;
 }
