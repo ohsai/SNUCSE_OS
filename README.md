@@ -138,12 +138,14 @@ kernel/gps.c :
 
     - Taylor expansion for transcendental function approximation, since only polynomial expression was allowed.
 
-    - %%taylor expansion formula for sin cos arccos and formula for deg <-> rad 
+    - Taylor expansion formula for sin cos formula for 180 degree to radian transition.
+    
+    - arccos() is approximated to the Lagrange polynomial interpolating (0, 1), (pi/3, 1/2), (pi/2, 0), (2pi/3, -1/2), (pi, -1).
 
   - Define cmp_inode_global which Compute distance between inode gps_location and GLOBAL_GPS with gps_float methods and Compare with accuracy to determine nearbyness
 
     - Mathematical Assumption : By [Spherical Law of Cosines](https://en.wikipedia.org/wiki/Spherical_law_of_cosines), we can assume the distance between two point on the sphere. 
-    - Implementation : If we assume point C of spherical triangle on the unit sphere as the pole, then *cos c = cos a cos b + sin a sin b cos C*. Because C is the pole, *a = pi/2 - lat1*, *b = pi/2 - lat2*, and c is the central angle between A and B. Also, we can approximate that *C = lng1 - lng2*. The we can rearrange the formular to *cos c = sin(lat1) sin(lat2) + cos(lat1) cos(lat2) cos(lng1-lng2)*. We can derive c after doing arccos on the result, then we can derive the actual distance by multiplying the Eath radius.
+    - Implementation : If we assume point C of spherical triangle on the unit sphere as the pole, then *cos c = cos a cos b + sin a sin b cos C*. Because C is the pole, *a = pi/2 - lat1*, *b = pi/2 - lat2*, and c is the central angle between A and B. Also, we can approximate that *C = lng1 - lng2*. Then we can rearrange the formular to *cos c = sin(lat1) sin(lat2) + cos(lat1) cos(lat2) cos(lng1-lng2)*. We can derive c after doing arccos on the result, then we can derive the actual distance by multiplying the Eath radius.
 
   - fetch location info from inode and feed it to cmp_inode_global
 
