@@ -31,7 +31,6 @@ gps_float gps_float_sub(gps_float a, gps_float b);
 gps_float gps_float_mul(gps_float a, gps_float b);
 gps_float gps_float_div(gps_float a, gps_float b);
 gps_float gps_float_2rad(gps_float a);
-//gps_float gps_float_2deg(gps_float a);
 gps_float gps_float_sin(gps_float a);
 gps_float gps_float_cos(gps_float a);
 gps_float gps_float_acos(gps_float a);
@@ -160,7 +159,6 @@ gps_float gps_float_sin(gps_float a){
                                                 gps_float_factorial(i)));
                 }
         }
-        //printk(KERN_DEBUG"gpsfloat calc sin(%d+0.%06d)-(%d+0.%06d) == 0 ",a.int_part, a.frac_part, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_cos(gps_float a){
@@ -180,7 +178,6 @@ gps_float gps_float_cos(gps_float a){
                                                 gps_float_factorial(i)));
                 }
         }
-        //printk(KERN_DEBUG"gpsfloat calc cos(%d+0.%06d)-(%d+0.%06d) == 0 ",a.int_part, a.frac_part, out.int_part, out.frac_part);
         return out;
 }
 gps_float gps_float_2rad(gps_float a) {
@@ -192,25 +189,10 @@ gps_float gps_float_2rad(gps_float a) {
 
 	tmp = gps_float_mul(a, PI);
 	out = gps_float_div(tmp, _180);
-	//printk(KERN_DEBUG"gpsfloat 2rad a : %d.%d, out : %d.%d",a.int_part, a.frac_part, out.int_part, out.frac_part);
 
 	return out;
 }
-/*
-gps_float gps_float_2deg(gps_float a) {
-	gps_float tmp;
-	gps_float out;
-	gps_float _180;
 
-	_180 = gps_float_init(180, 0);
-
-	tmp = gps_float_mul(a, _180);
-	out = gps_float_div(tmp, PI);
-	//printk(KERN_DEBUG"gpsfloat 2deg a : %d.%d, out : %d.%d",a.int_part, a.frac_part, out.int_part, out.frac_part);
-
-	return out;
-}
-*/
 gps_float gps_float_acos(gps_float a) {
 	gps_float out;
 	gps_float x = gps_float_init(-1, 301868);
@@ -232,10 +214,6 @@ int cmp_inode_global(struct gps_location* loc) {
 	gps_float theta;
 	gps_float dist;
 
-//	gps_float a = gps_float_init(60, 0);
-//	gps_float b = gps_float_init(1, 151500);
-//	gps_float c = gps_float_init(1609, 344000);
-
 	gps_float K = gps_float_init(6371, 0);
 	gps_float M = gps_float_init(1000, 0);
 
@@ -250,15 +228,6 @@ int cmp_inode_global(struct gps_location* loc) {
 		   				 gps_float_mul(gps_float_cos(gps_float_2rad(i_lat)),
 		   				 			   gps_float_mul(gps_float_cos(gps_float_2rad(g_lat)),
 		   							   				 gps_float_cos(gps_float_2rad(theta)))));
-
-//	dist = gps_float_2deg(gps_float_acos(dist)); /* acos! */
-	//printk(KERN_DEBUG"dist.int = %d	dist.frac = %d\n", dist.int_part, dist.frac_part);
-
-/*
-	dist = gps_float_mul(a,
-						 (gps_float_mul(b,
-										gps_float_mul(c, dist))));
-*/
 
 	dist = gps_float_acos(dist);
 	dist = gps_float_mul(M, gps_float_mul(K, dist));
@@ -348,7 +317,7 @@ SYSCALL_DEFINE1(set_gps_location, struct gps_location __user*, loc) {
         }
         
         //set global gps
-	write_lock(&gps_lock);//should we use write_lock_rqsave?
+	write_lock(&gps_lock);
 	GLOBAL_GPS.lat_integer = k_loc->lat_integer;
 	GLOBAL_GPS.lat_fractional = k_loc->lat_fractional;
 	GLOBAL_GPS.lng_integer = k_loc->lng_integer;
@@ -409,7 +378,6 @@ SYSCALL_DEFINE2(get_gps_location, const char __user*, pathname,
         //find inode for it and check permission
         cur_inode = cur_path.dentry->d_inode;
         if(inode_permission(cur_inode, MAY_READ)){
-                //printk(KERN_DEBUG"Not permitted\n");
                 return -EACCES;
         }
         //setup space for copy_to_user
