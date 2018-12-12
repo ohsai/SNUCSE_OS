@@ -18,11 +18,11 @@ kernel/gps.c :
 
 - Define set_gps_location :
 
-..- modify GLOBAL_GPS under rwlock
+  - modify GLOBAL_GPS under rwlock
 
-..- consider validity of user input gps location(lat, lng)
+  - consider validity of user input gps location(lat, lng)
 
-..- consider error cases
+  - consider error cases
 
 test/gpsupdate.c :
 
@@ -52,21 +52,21 @@ fs/ext2/inode.c :
 
 - load location fields from ext2_inode(disk) to ext2_inode_info(memory)
 
-..- cpu inherent endian to fixed endian using le32_to_cpu 
+  - cpu inherent endian to fixed endian using le32_to_cpu 
 
 - save location fields from ext2_inode_info(memory) to ext2_inode(disk) 
 
-..- fixed endian to cpu inherent endian using cpu_to_le32
+  - fixed endian to cpu inherent endian using cpu_to_le32
 
 - Define ext2_set_gps_location :
 
-..- readlock using rwlock
+  - readlock using rwlock
 
-..- save GLOBAL_GPS data to ext2_inode_info(memory)
+  - save GLOBAL_GPS data to ext2_inode_info(memory)
 
 - Define ext2_get_gps_location :
 
-..- get location data from ext2_inode_info(memory)
+  - get location data from ext2_inode_info(memory)
 
 
 
@@ -94,9 +94,9 @@ kernel/gps.c :
 
 - Define get_gps_location :
 
-..- Bring path to find file and its inode, then get gps location from it and copy_to_user
+  - Bring path to find file and its inode, then get gps location from it and copy_to_user
 
-..- consider error cases EACCESS, ENODEV, EINVAL, EFAULT, ENOMEM
+  - consider error cases EACCESS, ENODEV, EINVAL, EFAULT, ENOMEM
 
 test/file_loc.c :
 
@@ -128,27 +128,27 @@ kernel/gps.c :
 
 - Define nearby_created_area :
 
-..- Define struct gps_float which resembles float type, but has signed int part and unsigned and bounded (0 ~ 999999) fractional part
+  - Define struct gps_float which resembles float type, but has signed int part and unsigned and bounded (0 ~ 999999) fractional part
 
-..- Define initialization and arithmetics addition, subtraction, multiplication, division for gps_float
+  - Define initialization and arithmetics addition, subtraction, multiplication, division for gps_float
 
 %% logic for operation explanation needed 
 
-....-precision error less than 10^-5
+    -precision error less than 10^-5
 
-..- Define advanced functions degree2rad, rad2degree, sin(radian), cos(radian), arccos(radian), PI for gps_float
+  - Define advanced functions degree2rad, rad2degree, sin(radian), cos(radian), arccos(radian), PI for gps_float
 
- ....- Taylor expansion for transcendental function approximation, since only polynomial expression was allowed.
+     - Taylor expansion for transcendental function approximation, since only polynomial expression was allowed.
 
-....- %%taylor expansion formula for sin cos arccos and formula for deg <-> rad 
+    - %%taylor expansion formula for sin cos arccos and formula for deg <-> rad 
 
-..- Define cmp_inode_global which Compute distance between inode gps_location and GLOBAL_GPS with gps_float methods and Compare with accuracy to determine nearbyness
+  - Define cmp_inode_global which Compute distance between inode gps_location and GLOBAL_GPS with gps_float methods and Compare with accuracy to determine nearbyness
 
-....- Mathematical Assumption :
+    - Mathematical Assumption :
 
-....- Implementation : kji please write how you implemented it
+    - Implementation : kji please write how you implemented it
 
-..- fetch location info from inode and feed it to cmp_inode_global
+  - fetch location info from inode and feed it to cmp_inode_global
 
 
 
@@ -160,7 +160,7 @@ kernel/gps.c :
 
 - Creating float and its arithmetics with only int was extremely painful. Overflow on multiplication and division was dealt with using u64 and math64.h 64 bit int div operations.
 
-implementing location info write and permission was done on ext2 layer, since if we implement in lower layer like in vfs_write, unknown dependency from other file system may exist and corrupt the whole file system of artik device, and it is less complicated.
+- implementing location info write and permission was done on ext2 layer, since if we implement in lower layer like in vfs_write, unknown dependency from other file system may exist and corrupt the whole file system of artik device, and it is less complicated.
 
 - Always find an easiest way and easiest solution. If you cannot explain why, you don't know it.
 
