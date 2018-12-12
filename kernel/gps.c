@@ -31,7 +31,7 @@ gps_float gps_float_sub(gps_float a, gps_float b);
 gps_float gps_float_mul(gps_float a, gps_float b);
 gps_float gps_float_div(gps_float a, gps_float b);
 gps_float gps_float_2rad(gps_float a);
-gps_float gps_float_2deg(gps_float a);
+//gps_float gps_float_2deg(gps_float a);
 gps_float gps_float_sin(gps_float a);
 gps_float gps_float_cos(gps_float a);
 gps_float gps_float_acos(gps_float a);
@@ -196,7 +196,7 @@ gps_float gps_float_2rad(gps_float a) {
 
 	return out;
 }
-
+/*
 gps_float gps_float_2deg(gps_float a) {
 	gps_float tmp;
 	gps_float out;
@@ -210,6 +210,7 @@ gps_float gps_float_2deg(gps_float a) {
 
 	return out;
 }
+*/
 gps_float gps_float_acos(gps_float a) {
 	gps_float out;
 	gps_float x = gps_float_init(-1, 301868);
@@ -231,9 +232,12 @@ int cmp_inode_global(struct gps_location* loc) {
 	gps_float theta;
 	gps_float dist;
 
-	gps_float a = gps_float_init(60, 0);
-	gps_float b = gps_float_init(1, 151500);
-	gps_float c = gps_float_init(1609, 344000);
+//	gps_float a = gps_float_init(60, 0);
+//	gps_float b = gps_float_init(1, 151500);
+//	gps_float c = gps_float_init(1609, 344000);
+
+	gps_float K = gps_float_init(6371, 0);
+	gps_float M = gps_float_init(1000, 0);
 
 	i_lat = gps_float_init(loc->lat_integer, loc->lat_fractional);
 	i_lng = gps_float_init(loc->lng_integer, loc->lng_fractional);
@@ -247,13 +251,17 @@ int cmp_inode_global(struct gps_location* loc) {
 		   				 			   gps_float_mul(gps_float_cos(gps_float_2rad(g_lat)),
 		   							   				 gps_float_cos(gps_float_2rad(theta)))));
 
-	dist = gps_float_2deg(gps_float_acos(dist)); /* acos! */
+//	dist = gps_float_2deg(gps_float_acos(dist)); /* acos! */
 	//printk(KERN_DEBUG"dist.int = %d	dist.frac = %d\n", dist.int_part, dist.frac_part);
 
-
+/*
 	dist = gps_float_mul(a,
 						 (gps_float_mul(b,
 										gps_float_mul(c, dist))));
+*/
+
+	dist = gps_float_acos(dist);
+	dist = gps_float_mul(M, gps_float_mul(K, dist));
 
 	if (dist.int_part > loc->accuracy)
 		return 0; // too far
