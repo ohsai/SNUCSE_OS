@@ -38,9 +38,9 @@
 
 `fs/ext2/ext2.h` :
 
-- include gps-related fields in `ext2_inode`
+- include gps-related fields(32-bits little endian) in `ext2_inode`
 
-- include gps-related fields in `ext2_inode_info`
+- include gps-related fields(32-bit unsigned) in `ext2_inode_info`
 
 - export `ext2_set_gps_location` and `ext2_get_gps_location`
 
@@ -129,6 +129,13 @@
 - Define `nearby_created_area` :
 
   - Define `struct gps_float` which resembles float type, but has signed int part and unsigned and bounded (0 ~ 999999) fractional part
+  ```c
+  typedef struct pseudo_float {
+      int int_part;
+      int frac_part;
+  } gps_float;
+  
+  ```
 
   - Define initialization and arithmetics addition, subtraction, multiplication, division for `gps_float`
 
