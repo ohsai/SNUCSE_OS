@@ -112,7 +112,7 @@
 
 
 
-## Location-baced file access
+## Location-based file access
 
 `fs/ext2/file.c` :
 
