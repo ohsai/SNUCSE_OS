@@ -160,7 +160,31 @@
 
 # Evaluation
 
+  - Successful criteria:
+  
+    - `GLOBAL_GPS` update via `gpsupdate`
+    
+      - Input arg check etc.
+    
+    - File location info changed when creating, writing data
+    
+    - Getting GPS information of file via `file_loc`
+    
+      - Outside ext2 fs, -ENODEV error, 'GPS not implemented' error (which is expected)
+      
+    - `file_loc`, read(`cat`), write(`>>, >`) permission check (location-based file access)
+    
+    
+
 # Demo
+
+  - [youtube link to our file_loc demo](https://youtu.be/pwmgCRavBeo) demontrates
+  
+    - create file using `touch` that contains location info
+    
+    - updating gps for the device
+    
+    - location-based file access
 
 # Lessons Learned
 
